@@ -11,7 +11,7 @@ import {
  * Calculate Wealth Accumulation (Modul A)
  */
 export function calculateAccumulation(params: {
-  initialCapital: number;
+  initialCapital?: number;
   monthlyInvestment: number;
   targetMonthlyExpense: number;
   annualReturn: number;
@@ -20,7 +20,7 @@ export function calculateAccumulation(params: {
   swrMultiplier: number;
 }): AccumulationResult {
   const {
-    initialCapital,
+    initialCapital = 0,
     monthlyInvestment,
     targetMonthlyExpense,
     annualReturn,
@@ -35,24 +35,34 @@ export function calculateAccumulation(params: {
   const realReturnRate = annualReturn - annualInflation;
 
   // Financial Freedom Target Number
-  const targetFIRE = targetMonthlyExpense * 12 * swrMultiplier;
+  const targetFIRE = Math.round(targetMonthlyExpense * 12 * swrMultiplier);
 
   const dataPoints: AccumulationDataPoint[] = [];
   let yearReached: number | null = null;
 
-  // Year 0 (Starting point)
+  // Year 0 (Starting point: starts from 0 rupiah)
+  const initCap = initialCapital || 0;
+  const delta0 = initCap - targetFIRE;
+  const deltaPercent0 = targetFIRE > 0 ? (delta0 / targetFIRE) * 100 : 0;
+  const status0: 'surplus' | 'exact' | 'deficit' =
+    delta0 > 0 ? 'surplus' : delta0 === 0 ? 'exact' : 'deficit';
+
   dataPoints.push({
     year: 0,
     label: 'Tahun 0',
-    totalPortfolio: Math.round(initialCapital),
-    totalPrincipal: Math.round(initialCapital),
+    totalPortfolio: Math.round(initCap),
+    totalPrincipal: Math.round(initCap),
     compoundGain: 0,
-    realPortfolio: Math.round(initialCapital),
-    targetFIRE: Math.round(targetFIRE),
-    isReached: initialCapital >= targetFIRE,
+    realPortfolio: Math.round(initCap),
+    realPrincipal: Math.round(initCap),
+    targetFIRE,
+    isReached: initCap >= targetFIRE && targetFIRE > 0,
+    fireDelta: delta0,
+    fireDeltaPercent: Number(deltaPercent0.toFixed(1)),
+    fireStatus: status0,
   });
 
-  if (initialCapital >= targetFIRE && yearReached === null) {
+  if (initCap >= targetFIRE && targetFIRE > 0 && yearReached === null) {
     yearReached = 0;
   }
 
@@ -63,22 +73,29 @@ export function calculateAccumulation(params: {
     // A_t = P * (1 + r/12)^(12t) + PMT * [((1 + r/12)^(12t) - 1) / (r/12)]
     let totalPortfolio: number;
     if (monthlyRate === 0) {
-      totalPortfolio = initialCapital + monthlyInvestment * totalMonths;
+      totalPortfolio = initCap + monthlyInvestment * totalMonths;
     } else {
       const compoundFactor = Math.pow(1 + monthlyRate, totalMonths);
       totalPortfolio =
-        initialCapital * compoundFactor +
+        initCap * compoundFactor +
         monthlyInvestment * ((compoundFactor - 1) / monthlyRate);
     }
 
-    const totalPrincipal = initialCapital + monthlyInvestment * totalMonths;
+    const totalPrincipal = initCap + monthlyInvestment * totalMonths;
     const compoundGain = Math.max(0, totalPortfolio - totalPrincipal);
 
-    // Real value adjusted for inflation
+    // Real value adjusted for inflation (dikurangi inflasi pertahun)
     const inflationFactor = Math.pow(1 + inflationRate, year);
     const realPortfolio = totalPortfolio / inflationFactor;
+    const realPrincipal = totalPrincipal / inflationFactor;
 
-    const isReached = totalPortfolio >= targetFIRE;
+    const roundedPortfolio = Math.round(totalPortfolio);
+    const delta = roundedPortfolio - targetFIRE;
+    const deltaPercent = targetFIRE > 0 ? (delta / targetFIRE) * 100 : 0;
+    const fireStatus: 'surplus' | 'exact' | 'deficit' =
+      delta > 0 ? 'surplus' : delta === 0 ? 'exact' : 'deficit';
+
+    const isReached = roundedPortfolio >= targetFIRE;
     if (isReached && yearReached === null) {
       yearReached = year;
     }
@@ -86,20 +103,32 @@ export function calculateAccumulation(params: {
     dataPoints.push({
       year,
       label: `Thn ${year}`,
-      totalPortfolio: Math.round(totalPortfolio),
+      totalPortfolio: roundedPortfolio,
       totalPrincipal: Math.round(totalPrincipal),
       compoundGain: Math.round(compoundGain),
       realPortfolio: Math.round(realPortfolio),
-      targetFIRE: Math.round(targetFIRE),
+      realPrincipal: Math.round(realPrincipal),
+      targetFIRE,
       isReached,
+      fireDelta: delta,
+      fireDeltaPercent: Number(deltaPercent.toFixed(1)),
+      fireStatus,
     });
   }
 
   const lastPoint = dataPoints[dataPoints.length - 1];
   const finalPortfolio = lastPoint ? lastPoint.totalPortfolio : 0;
   const finalPrincipal = lastPoint ? lastPoint.totalPrincipal : 0;
+  const finalRealPortfolio = lastPoint ? lastPoint.realPortfolio : 0;
+  const finalRealPrincipal = lastPoint ? lastPoint.realPrincipal : 0;
   const finalGain = Math.max(0, finalPortfolio - finalPrincipal);
   const gainPercentage = finalPrincipal > 0 ? (finalGain / finalPrincipal) * 100 : 0;
+
+  const finalFireDelta = finalPortfolio - targetFIRE;
+  const finalFireDeltaPercent = targetFIRE > 0 ? (finalFireDelta / targetFIRE) * 100 : 0;
+  const finalFireStatus: 'surplus' | 'exact' | 'deficit' =
+    finalFireDelta > 0 ? 'surplus' : finalFireDelta === 0 ? 'exact' : 'deficit';
+  const achievementPercentage = targetFIRE > 0 ? (finalPortfolio / targetFIRE) * 100 : 0;
 
   // Safe monthly passive income produced by final portfolio (at selected SWR rate)
   const safeMonthlyPassiveIncome = Math.round(finalPortfolio / (12 * swrMultiplier));
@@ -108,12 +137,18 @@ export function calculateAccumulation(params: {
     dataPoints,
     finalPortfolio,
     finalPrincipal,
+    finalRealPortfolio,
+    finalRealPrincipal,
     finalGain,
     realReturnRate,
-    targetFIRE: Math.round(targetFIRE),
+    targetFIRE,
     yearReached,
     safeMonthlyPassiveIncome,
     gainPercentage,
+    finalFireDelta,
+    finalFireDeltaPercent: Number(finalFireDeltaPercent.toFixed(1)),
+    finalFireStatus,
+    achievementPercentage: Number(achievementPercentage.toFixed(1)),
   };
 }
 

@@ -3,7 +3,7 @@ export type TabType = 'accumulation' | 'decumulation';
 export type SWRMultiplierOption = 25 | 28.57 | 30.77; // 4%, 3.5%, 3.25%
 
 export interface AccumulationParams {
-  initialCapital: number;       // Modal Awal (Rp)
+  initialCapital?: number;      // Modal Awal (Rp), mulai dari 0
   monthlyInvestment: number;    // Investasi Rutin per Bulan (Rp)
   targetMonthlyExpense: number; // Target Pengeluaran Hidup Bulanan saat FIRE (Rp)
   annualReturn: number;         // Asumsi Imbal Hasil Investasi Tahunan (%)
@@ -15,24 +15,34 @@ export interface AccumulationParams {
 export interface AccumulationDataPoint {
   year: number;
   label: string;
-  totalPortfolio: number;       // Total Nilai Portofolio (Bunga Bergulung)
-  totalPrincipal: number;       // Total Modal Disetor (Pokok)
+  totalPortfolio: number;       // Total Nilai Portofolio (Bunga Bergulung) - Nominal
+  totalPrincipal: number;       // Total Modal Disetor (Pokok) - Nominal
   compoundGain: number;         // Keuntungan Bunga Majemuk
-  realPortfolio: number;        // Nilai Riil Disesuaikan Inflasi
+  realPortfolio: number;        // Nilai Portofolio Riil (Disesuaikan Inflasi)
+  realPrincipal: number;        // Nilai Pokok Riil (Disesuaikan Inflasi)
   targetFIRE: number;           // Target Dana FIRE
   isReached: boolean;
+  fireDelta: number;            // Selisih nominal (+ surplus, 0 pas, - defisit)
+  fireDeltaPercent: number;     // Persentase selisih thdp target (+/0/-)
+  fireStatus: 'surplus' | 'exact' | 'deficit'; // Ketetapan status target FIRE
 }
 
 export interface AccumulationResult {
   dataPoints: AccumulationDataPoint[];
   finalPortfolio: number;
   finalPrincipal: number;
+  finalRealPortfolio: number;
+  finalRealPrincipal: number;
   finalGain: number;
   realReturnRate: number;
   targetFIRE: number;
   yearReached: number | null;   // null jika belum tercapai dalam horison
   safeMonthlyPassiveIncome: number;
   gainPercentage: number;
+  finalFireDelta: number;        // Selisih akhir thdp target (+ surplus, 0 pas, - defisit)
+  finalFireDeltaPercent: number; // Persentase selisih akhir (+/0/-)
+  finalFireStatus: 'surplus' | 'exact' | 'deficit'; // Ketetapan status FIRE akhir
+  achievementPercentage: number; // Persentase ketercapaian target FIRE (cth: 120% atau 85%)
 }
 
 export interface DecumulationParams {

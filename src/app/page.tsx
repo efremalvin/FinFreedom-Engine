@@ -3,7 +3,7 @@ import { Sparkles, ShieldCheck, Calculator, ArrowUpRight } from 'lucide-react';
 
 export default function Home() {
   return (
-    <main className="min-h-screen bg-zinc-950 text-zinc-100 antialiased py-8 px-2 sm:px-4">
+    <main className="min-h-screen bg-zinc-950 text-zinc-100 antialiased py-2.5 sm:py-8 px-0 sm:px-4">
       {/* Background radial gradient glow */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
         <div className="absolute top-[-10%] left-[20%] w-[500px] h-[500px] bg-emerald-500/10 rounded-full blur-[140px]" />
@@ -12,8 +12,8 @@ export default function Home() {
       </div>
 
       <div className="relative z-10">
-        {/* Top Header Badge */}
-        <div className="max-w-7xl mx-auto px-4 mb-4">
+        {/* Top Header Badge (Desktop/Tablet) */}
+        <div className="hidden sm:block max-w-7xl mx-auto px-4 mb-4">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-zinc-900 border border-zinc-800 text-xs text-zinc-300">
             <span className="w-2 h-2 rounded-full bg-emerald-400" />
             <span className="font-medium">Next.js App Router & TypeScript</span>

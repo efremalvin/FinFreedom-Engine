@@ -19,6 +19,9 @@ import {
   Award,
   Layers,
   Percent,
+  Eye,
+  EyeOff,
+  Filter,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -49,12 +52,13 @@ import {
   TabType,
   SWRMultiplierOption,
   AccumulationParams,
+  AccumulationDataPoint,
   DecumulationParams,
 } from '@/types/simulator';
 
 // Initial Defaults for Modul A
 const defaultAccumulationParams: AccumulationParams = {
-  initialCapital: 50_000_000,
+  initialCapital: 0, // Ditetapkan mulai dari 0 rupiah
   monthlyInvestment: 5_000_000,
   targetMonthlyExpense: 10_000_000,
   annualReturn: 10.0,
@@ -78,10 +82,19 @@ export const FinFreedomEngine: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabType>('accumulation');
   const [isDarkMode, setIsDarkMode] = useState<boolean>(true);
   const [showTableModal, setShowTableModal] = useState<boolean>(false);
+  const [mobileView, setMobileView] = useState<'params' | 'results' | 'all'>('all');
 
   // Modul A State
   const [accumParams, setAccumParams] =
     useState<AccumulationParams>(defaultAccumulationParams);
+
+  // Modul A Chart Series Filter (4 graphs: 2 nominal + 2 adjusted for inflation)
+  const [chartFilters, setChartFilters] = useState({
+    nominalPortfolio: true,
+    nominalPrincipal: true,
+    realPortfolio: true,
+    realPrincipal: true,
+  });
 
   // Modul B State
   const [decumParams, setDecumParams] =
@@ -140,43 +153,41 @@ export const FinFreedomEngine: React.FC = () => {
   }
 
   return (
-    <div className="w-full max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8 space-y-6">
+    <div className="w-full max-w-7xl mx-auto px-3 py-3 sm:px-6 sm:py-6 lg:px-8 space-y-4 sm:space-y-6">
       {/* Top Header Bar */}
-      <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-zinc-800/80">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-700 flex items-center justify-center shadow-lg shadow-emerald-500/20 text-white font-bold text-lg">
-              <Sparkles className="w-5 h-5 text-emerald-100" />
-            </div>
-            <div>
-              <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-zinc-100 flex items-center gap-2">
-                FinFreedom Engine
-                <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                  ID Edition
-                </span>
-              </h1>
-              <p className="text-xs text-zinc-400">
-                Arsitektur Finansial FIRE & Pengujian Ketahanan Portofolio Pensiun Indonesia
-              </p>
-            </div>
+      <header className="flex items-center justify-between gap-3 pb-3 sm:pb-4 border-b border-zinc-800/80">
+        <div className="min-w-0 flex items-center gap-2.5">
+          <div className="w-9 h-9 shrink-0 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-700 flex items-center justify-center shadow-lg shadow-emerald-500/20 text-white font-bold text-lg">
+            <Sparkles className="w-5 h-5 text-emerald-100" />
+          </div>
+          <div className="min-w-0">
+            <h1 className="text-lg sm:text-2xl font-bold tracking-tight text-zinc-100 flex flex-wrap items-center gap-1.5 sm:gap-2">
+              <span>FinFreedom Engine</span>
+              <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                ID Edition
+              </span>
+            </h1>
+            <p className="text-[11px] sm:text-xs text-zinc-400 line-clamp-1 sm:line-clamp-none">
+              Arsitektur Finansial FIRE & Pengujian Ketahanan Portofolio Pensiun Indonesia
+            </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           <button
             type="button"
             onClick={toggleTheme}
-            className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-zinc-800 bg-zinc-900/80 text-zinc-300 hover:text-white hover:bg-zinc-800 text-xs font-medium transition-all"
+            className="flex items-center gap-2 p-2 sm:px-3 sm:py-1.5 rounded-lg border border-zinc-800 bg-zinc-900/80 text-zinc-300 hover:text-white hover:bg-zinc-800 text-xs font-medium transition-all"
             title="Ganti Tema Tampilan"
           >
             {isDarkMode ? (
               <>
-                <Sun className="w-3.5 h-3.5 text-amber-400" />
+                <Sun className="w-4 h-4 sm:w-3.5 sm:h-3.5 text-amber-400" />
                 <span className="hidden sm:inline">Light Mode</span>
               </>
             ) : (
               <>
-                <Moon className="w-3.5 h-3.5 text-indigo-400" />
+                <Moon className="w-4 h-4 sm:w-3.5 sm:h-3.5 text-indigo-400" />
                 <span className="hidden sm:inline">Dark Mode</span>
               </>
             )}
@@ -190,16 +201,17 @@ export const FinFreedomEngine: React.FC = () => {
           <button
             type="button"
             onClick={() => setActiveTab('accumulation')}
-            className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all relative ${
+            className={`flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all relative ${
               activeTab === 'accumulation'
                 ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-md shadow-emerald-500/20'
                 : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'
             }`}
           >
-            <TrendingUp className="w-4 h-4" />
-            <span>1. Akumulasi Dana FIRE</span>
+            <TrendingUp className="w-4 h-4 shrink-0" />
+            <span className="hidden sm:inline">1. Akumulasi Dana FIRE</span>
+            <span className="sm:hidden">1. Akumulasi</span>
             <span
-              className={`text-[10px] px-1.5 py-0.2 rounded-md ${
+              className={`hidden md:inline-block text-[10px] px-1.5 py-0.2 rounded-md ${
                 activeTab === 'accumulation'
                   ? 'bg-white/20 text-white'
                   : 'bg-zinc-800 text-zinc-400'
@@ -212,16 +224,17 @@ export const FinFreedomEngine: React.FC = () => {
           <button
             type="button"
             onClick={() => setActiveTab('decumulation')}
-            className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all relative ${
+            className={`flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all relative ${
               activeTab === 'decumulation'
                 ? 'bg-gradient-to-r from-amber-500 to-rose-600 text-white shadow-md shadow-amber-500/20'
                 : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'
             }`}
           >
-            <ShieldAlert className="w-4 h-4" />
-            <span>2. Uji Ketahanan SWR</span>
+            <ShieldAlert className="w-4 h-4 shrink-0" />
+            <span className="hidden sm:inline">2. Uji Ketahanan SWR</span>
+            <span className="sm:hidden">2. Uji SWR</span>
             <span
-              className={`text-[10px] px-1.5 py-0.2 rounded-md ${
+              className={`hidden md:inline-block text-[10px] px-1.5 py-0.2 rounded-md ${
                 activeTab === 'decumulation'
                   ? 'bg-white/20 text-white'
                   : 'bg-zinc-800 text-zinc-400'
@@ -239,16 +252,124 @@ export const FinFreedomEngine: React.FC = () => {
         </div>
       </nav>
 
+      {/* Sticky Mobile Live Scoreboard & View Switcher */}
+      <div className="lg:hidden sticky top-2 z-30 bg-zinc-950/95 backdrop-blur-xl border border-zinc-800/90 rounded-2xl p-2.5 shadow-2xl shadow-black/80 space-y-2">
+        {activeTab === 'accumulation' ? (
+          <div className="flex items-center justify-between gap-2 px-1">
+            <div className="min-w-0">
+              <div className="text-[10px] text-zinc-400 flex items-center gap-1.5">
+                <span>Porto ({accumParams.timeHorizonYears} Thn):</span>
+                <span className="text-sky-400 font-semibold">
+                  Riil {formatCompactIDR(accumulationResult.finalRealPortfolio)}
+                </span>
+              </div>
+              <div className="text-sm font-extrabold text-emerald-400 tabular-nums truncate">
+                {formatCompactIDR(accumulationResult.finalPortfolio)}
+              </div>
+            </div>
+
+            <div className="text-right shrink-0">
+              <div className="text-[10px] text-zinc-400">
+                Target FIRE: <strong className="text-zinc-200">{formatCompactIDR(accumulationResult.targetFIRE)}</strong>
+              </div>
+              <div
+                className={`inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full border mt-0.5 tabular-nums ${
+                  accumulationResult.finalFireStatus === 'surplus'
+                    ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40'
+                    : accumulationResult.finalFireStatus === 'exact'
+                    ? 'bg-sky-500/15 text-sky-300 border-sky-500/40'
+                    : 'bg-rose-500/15 text-rose-300 border-rose-500/40'
+                }`}
+              >
+                {accumulationResult.finalFireStatus === 'surplus'
+                  ? `✓ +${formatCompactIDR(accumulationResult.finalFireDelta)}`
+                  : accumulationResult.finalFireStatus === 'exact'
+                  ? '✓ Pas 100%'
+                  : `✗ -${formatCompactIDR(Math.abs(accumulationResult.finalFireDelta))}`}
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center justify-between gap-2 px-1">
+            <div className="min-w-0">
+              <div className="text-[10px] text-zinc-400">
+                Saldo Pensiun ({decumParams.retirementYears} Thn)
+              </div>
+              <div className="text-sm font-extrabold text-amber-400 tabular-nums truncate">
+                {formatCompactIDR(decumParams.initialRetirementBalance)}
+              </div>
+            </div>
+
+            <div className="text-right shrink-0">
+              <div className="text-[10px] text-zinc-400">
+                SWR 3.25%: <strong className="text-emerald-400">{formatCompactIDR(decumulationResult.finalBalanceConservative)}</strong>
+              </div>
+              <div
+                className={`inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full border mt-0.5 ${
+                  decumulationResult.standardFailureYear !== null
+                    ? 'bg-rose-500/15 text-rose-300 border-rose-500/40'
+                    : 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40'
+                }`}
+              >
+                {decumulationResult.standardFailureYear !== null
+                  ? `⚠ 4% Habis Thn ${decumulationResult.standardFailureYear}`
+                  : '✓ 4% & 3.25% Aman'}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 3-Way Segmented Mobile View Control */}
+        <div className="grid grid-cols-3 gap-1 p-1 bg-zinc-900/90 border border-zinc-800/80 rounded-xl">
+          <button
+            type="button"
+            onClick={() => setMobileView('all')}
+            className={`py-1.5 px-2 rounded-lg text-[11px] font-semibold flex items-center justify-center gap-1 transition-all ${
+              mobileView === 'all'
+                ? 'bg-zinc-800 text-white shadow-sm border border-zinc-700/80'
+                : 'text-zinc-400 hover:text-zinc-200'
+            }`}
+          >
+            <Layers className="w-3 h-3" />
+            <span>Semua</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setMobileView('params')}
+            className={`py-1.5 px-2 rounded-lg text-[11px] font-semibold flex items-center justify-center gap-1 transition-all ${
+              mobileView === 'params'
+                ? 'bg-zinc-800 text-white shadow-sm border border-zinc-700/80'
+                : 'text-zinc-400 hover:text-zinc-200'
+            }`}
+          >
+            <Wallet className="w-3 h-3" />
+            <span>Input</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setMobileView('results')}
+            className={`py-1.5 px-2 rounded-lg text-[11px] font-semibold flex items-center justify-center gap-1 transition-all ${
+              mobileView === 'results'
+                ? 'bg-zinc-800 text-white shadow-sm border border-zinc-700/80'
+                : 'text-zinc-400 hover:text-zinc-200'
+            }`}
+          >
+            <TrendingUp className="w-3 h-3" />
+            <span>Grafik</span>
+          </button>
+        </div>
+      </div>
+
       {/* Main Simulation Viewport (2-Column Grid on Desktop) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6">
         {/* ========================================================================= */}
         {/* TAB 1: MODUL A - AKUMULASI DANA MENUJU FINANCIAL FREEDOM */}
         {/* ========================================================================= */}
         {activeTab === 'accumulation' && (
           <>
             {/* Left Column: Control Panel */}
-            <div className="lg:col-span-5 space-y-5">
-              <div className="bg-zinc-900/70 border border-zinc-800 rounded-2xl p-5 shadow-lg space-y-5">
+            <div className={`lg:col-span-5 space-y-4 sm:space-y-5 ${mobileView === 'results' ? 'hidden lg:block' : 'block'}`}>
+              <div className="bg-zinc-900/70 border border-zinc-800 rounded-2xl p-3.5 sm:p-5 shadow-lg space-y-3.5 sm:space-y-5">
                 <div className="flex items-center justify-between pb-3 border-b border-zinc-800/80">
                   <div className="flex items-center gap-2">
                     <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
@@ -259,41 +380,30 @@ export const FinFreedomEngine: React.FC = () => {
                         Parameter Akumulasi Portofolio
                       </h2>
                       <p className="text-[11px] text-zinc-400">
-                        Sesuaikan modal, tabungan bulanan, dan profil imbal hasil
+                        Sesuaikan tabungan bulanan, target biaya, dan imbal hasil
                       </p>
                     </div>
                   </div>
                   <button
                     type="button"
                     onClick={() => setAccumParams(defaultAccumulationParams)}
-                    className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-colors"
+                    className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-colors shrink-0"
                     title="Reset ke Nilai Standar"
                   >
                     <RotateCcw className="w-3.5 h-3.5" />
                   </button>
                 </div>
 
-                {/* 1. Modal Awal */}
-                <NumericSliderInput
-                  label="Modal Awal (Pokok Pertama)"
-                  value={accumParams.initialCapital}
-                  onChange={(val) =>
-                    setAccumParams((prev) => ({ ...prev, initialCapital: val }))
-                  }
-                  min={0}
-                  max={1_000_000_000}
-                  step={5_000_000}
-                  prefix="Rp"
-                  isCurrency={true}
-                  tooltip="Total dana investasi yang telah Anda miliki saat ini."
-                  quickPresets={[
-                    { label: '0', value: 0 },
-                    { label: '50 Jt', value: 50_000_000 },
-                    { label: '100 Jt', value: 100_000_000 },
-                    { label: '250 Jt', value: 250_000_000 },
-                  ]}
-                  accentColor="emerald"
-                />
+                {/* 1. Modal Awal Tetap: Mulai dari Rp 0 */}
+                <div className="p-2.5 sm:p-3 bg-zinc-950/70 rounded-xl border border-zinc-800 flex items-center justify-between gap-2 text-xs">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" />
+                    <span className="text-zinc-300 font-medium">Modal Awal Portofolio:</span>
+                  </div>
+                  <span className="font-bold text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-md border border-emerald-500/20 shrink-0">
+                    Rp 0 (Mulai dari Nol)
+                  </span>
+                </div>
 
                 {/* 2. Investasi Rutin Bulanan */}
                 <NumericSliderInput
@@ -465,13 +575,13 @@ export const FinFreedomEngine: React.FC = () => {
                 />
 
                 {/* Imbal Hasil Riil Display Pill */}
-                <div className="p-3 bg-zinc-950/80 rounded-xl border border-zinc-800 flex items-center justify-between text-xs">
+                <div className="p-2.5 sm:p-3 bg-zinc-950/80 rounded-xl border border-zinc-800 flex items-center justify-between gap-2 text-xs">
                   <div className="flex items-center gap-1.5 text-zinc-400">
-                    <Percent className="w-3.5 h-3.5 text-emerald-400" />
+                    <Percent className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
                     <span>Imbal Hasil Riil Bersih (Net of Inflation):</span>
                   </div>
                   <span
-                    className={`font-bold ${
+                    className={`font-bold shrink-0 ${
                       accumulationResult.realReturnRate > 0
                         ? 'text-emerald-400'
                         : 'text-rose-400'
@@ -480,106 +590,282 @@ export const FinFreedomEngine: React.FC = () => {
                     {accumulationResult.realReturnRate.toFixed(1)}% / tahun
                   </span>
                 </div>
+
+                {/* Mobile Quick Action Bar to View Results */}
+                <div className="lg:hidden pt-3 border-t border-zinc-800 flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="text-[10px] text-zinc-400">Target FIRE: {formatCompactIDR(accumulationResult.targetFIRE)}</div>
+                    <div className={`text-xs font-bold truncate ${
+                      accumulationResult.finalFireStatus === 'surplus'
+                        ? 'text-emerald-400'
+                        : accumulationResult.finalFireStatus === 'exact'
+                        ? 'text-sky-400'
+                        : 'text-rose-400'
+                    }`}>
+                      Porto: {formatCompactIDR(accumulationResult.finalPortfolio)} ({accumulationResult.finalFireStatus === 'surplus' ? `+${formatCompactIDR(accumulationResult.finalFireDelta)}` : accumulationResult.finalFireStatus === 'exact' ? 'Pas' : `-${formatCompactIDR(Math.abs(accumulationResult.finalFireDelta))}`})
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setMobileView('results')}
+                    className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-emerald-500/20 active:scale-95 transition shrink-0"
+                  >
+                    <span>Lihat Grafik</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
             </div>
 
             {/* Right Column: Stat Cards & Recharts Graph */}
-            <div className="lg:col-span-7 space-y-5">
-              {/* Stat Cards (4 Cards Grid) */}
-              <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                {/* Card 1: Target Dana FIRE */}
-                <div className="bg-zinc-900/80 border border-zinc-800 rounded-2xl p-4 space-y-1 relative overflow-hidden group hover:border-emerald-500/40 transition-all">
-                  <div className="text-[11px] font-medium text-zinc-400 uppercase tracking-wider">
-                    Target Dana FIRE
+            <div className={`lg:col-span-7 space-y-4 sm:space-y-5 ${mobileView === 'params' ? 'hidden lg:block' : 'block'}`}>
+              {/* Mobile Back Button to Params */}
+              {mobileView === 'results' && (
+                <div className="lg:hidden flex items-center justify-between pb-1">
+                  <button
+                    type="button"
+                    onClick={() => setMobileView('params')}
+                    className="text-xs px-3 py-1.5 rounded-lg bg-zinc-800 text-zinc-300 hover:text-white flex items-center gap-1.5 border border-zinc-700/80 transition"
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                    <span>Ubah Parameter Input</span>
+                  </button>
+                  <span className="text-[11px] text-zinc-400">
+                    Horizon {accumParams.timeHorizonYears} Tahun
+                  </span>
+                </div>
+              )}
+              {/* Dual Hero Cards (Desktop & Mobile Refined Layout) */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 sm:gap-4">
+                {/* Hero Card 1: Ketetapan Target FIRE & Pencapaian */}
+                <div
+                  className={`p-3.5 sm:p-5 rounded-2xl border transition-all relative overflow-hidden backdrop-blur-md ${
+                    accumulationResult.finalFireStatus === 'surplus'
+                      ? 'bg-gradient-to-br from-emerald-950/40 via-zinc-900/90 to-zinc-900/90 border-emerald-500/40 shadow-lg shadow-emerald-950/30'
+                      : accumulationResult.finalFireStatus === 'exact'
+                      ? 'bg-gradient-to-br from-sky-950/40 via-zinc-900/90 to-zinc-900/90 border-sky-500/40 shadow-lg shadow-sky-950/30'
+                      : 'bg-gradient-to-br from-rose-950/40 via-zinc-900/90 to-zinc-900/90 border-rose-500/40 shadow-lg shadow-rose-950/30'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2 pb-2 mb-2 border-b border-zinc-800/80">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div
+                        className={`p-1.5 rounded-lg shrink-0 ${
+                          accumulationResult.finalFireStatus === 'surplus'
+                            ? 'bg-emerald-500/20 text-emerald-400'
+                            : accumulationResult.finalFireStatus === 'exact'
+                            ? 'bg-sky-500/20 text-sky-400'
+                            : 'bg-rose-500/20 text-rose-400'
+                        }`}
+                      >
+                        {accumulationResult.finalFireStatus === 'surplus' ? (
+                          <Award className="w-4 h-4" />
+                        ) : accumulationResult.finalFireStatus === 'exact' ? (
+                          <CheckCircle2 className="w-4 h-4" />
+                        ) : (
+                          <AlertTriangle className="w-4 h-4" />
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <span className="text-xs font-bold text-zinc-200 block">
+                          Ketetapan Target FIRE
+                        </span>
+                        <p className="text-[10px] text-zinc-400">
+                          Target: {formatCompactIDR(accumulationResult.targetFIRE)} ({accumParams.swrMultiplier}x biaya thn)
+                        </p>
+                      </div>
+                    </div>
+
+                    <span
+                      className={`text-[10px] sm:text-[11px] font-bold px-2 sm:px-2.5 py-0.5 rounded-full border shrink-0 ${
+                        accumulationResult.finalFireStatus === 'surplus'
+                          ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                          : accumulationResult.finalFireStatus === 'exact'
+                          ? 'bg-sky-500/20 text-sky-300 border-sky-500/40'
+                          : 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                      }`}
+                    >
+                      {accumulationResult.finalFireStatus === 'surplus'
+                        ? '✓ Tercapai (+)'
+                        : accumulationResult.finalFireStatus === 'exact'
+                        ? '✓ Pas 100%'
+                        : '✗ Defisit (-)'}
+                    </span>
                   </div>
-                  <div className="text-base sm:text-lg font-bold text-zinc-100 tracking-tight">
-                    {formatCompactIDR(accumulationResult.targetFIRE)}
+
+                  <div className="my-2">
+                    <div
+                      className={`text-2xl sm:text-3xl font-extrabold tracking-tight tabular-nums ${
+                        accumulationResult.finalFireStatus === 'surplus'
+                          ? 'text-emerald-400'
+                          : accumulationResult.finalFireStatus === 'exact'
+                          ? 'text-sky-400'
+                          : 'text-rose-400'
+                      }`}
+                    >
+                      {accumulationResult.finalFireStatus === 'surplus'
+                        ? `+${formatCompactIDR(accumulationResult.finalFireDelta)}`
+                        : accumulationResult.finalFireStatus === 'exact'
+                        ? 'Pas 100%'
+                        : `-${formatCompactIDR(Math.abs(accumulationResult.finalFireDelta))}`}
+                    </div>
+                    <div className="text-[11px] sm:text-xs text-zinc-300 font-medium mt-1 leading-snug">
+                      {accumulationResult.finalFireStatus === 'surplus'
+                        ? `Surplus +${formatIDR(accumulationResult.finalFireDelta)} (+${accumulationResult.finalFireDeltaPercent}% di atas target)`
+                        : accumulationResult.finalFireStatus === 'exact'
+                        ? `Tepat Rp ${formatNumberWithDots(accumulationResult.targetFIRE)} (Sempurna 100%)`
+                        : `Kurang ${formatIDR(Math.abs(accumulationResult.finalFireDelta))} (${accumulationResult.finalFireDeltaPercent}% dari target)`}
+                    </div>
                   </div>
-                  <div className="text-[10px] text-zinc-500 truncate">
-                    {formatIDR(accumulationResult.targetFIRE)}
-                  </div>
-                  <div className="pt-1 text-[10px] text-emerald-400/90 font-medium">
-                    {accumParams.swrMultiplier}x biaya hidup thn
+
+                  {/* Progress Bar & Milestone */}
+                  <div className="mt-3 pt-2 border-t border-zinc-800/60 space-y-1.5">
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="text-zinc-400">Kemajuan Target:</span>
+                      <span className="font-bold text-zinc-200">{accumulationResult.achievementPercentage}%</span>
+                    </div>
+                    <div className="w-full h-2 bg-zinc-800 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all duration-300 ${
+                          accumulationResult.finalFireStatus === 'surplus'
+                            ? 'bg-gradient-to-r from-emerald-500 to-teal-400'
+                            : accumulationResult.finalFireStatus === 'exact'
+                            ? 'bg-gradient-to-r from-sky-500 to-teal-400'
+                            : 'bg-gradient-to-r from-rose-500 to-amber-400'
+                        }`}
+                        style={{ width: `${Math.min(accumulationResult.achievementPercentage, 100)}%` }}
+                      />
+                    </div>
+                    <div className="text-[11px] text-zinc-400 leading-snug">
+                      {accumulationResult.yearReached !== null
+                        ? `🎉 Bebas finansial tercapai di Tahun ke-${accumulationResult.yearReached}!`
+                        : `Belum tercapai dalam ${accumParams.timeHorizonYears} tahun (tambah tabungan / waktu).`}
+                    </div>
                   </div>
                 </div>
 
-                {/* Card 2: Proyeksi Portofolio Akhir */}
-                <div className="bg-zinc-900/80 border border-zinc-800 rounded-2xl p-4 space-y-1 relative overflow-hidden group hover:border-emerald-500/40 transition-all">
-                  <div className="text-[11px] font-medium text-zinc-400 uppercase tracking-wider">
-                    Nilai Akhir Portofolio
+                {/* Hero Card 2: Hasil Akhir Portofolio & Passive Income */}
+                <div className="p-3.5 sm:p-5 rounded-2xl border border-zinc-800/90 bg-zinc-900/80 shadow-lg space-y-3">
+                  <div className="flex items-center justify-between gap-2 pb-2 border-b border-zinc-800/80">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shrink-0">
+                        <TrendingUp className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <span className="text-xs font-bold text-zinc-200 block">
+                          Hasil Akhir Portofolio
+                        </span>
+                        <p className="text-[10px] text-zinc-400">
+                          Thn ke-{accumParams.timeHorizonYears} (Mulai Rp 0)
+                        </p>
+                      </div>
+                    </div>
+                    <span className="text-[10px] font-medium text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20 shrink-0">
+                      Passive Income Aman
+                    </span>
                   </div>
-                  <div className="text-base sm:text-lg font-bold text-emerald-400 tracking-tight">
-                    {formatCompactIDR(accumulationResult.finalPortfolio)}
+
+                  <div className="grid grid-cols-2 gap-2.5 pt-0.5">
+                    <div className="p-2.5 rounded-xl bg-zinc-950/60 border border-zinc-800/60">
+                      <div className="text-[10px] font-medium text-zinc-400 uppercase tracking-wider flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+                        Nominal
+                      </div>
+                      <div className="text-lg sm:text-2xl font-bold text-emerald-400 tabular-nums mt-0.5">
+                        {formatCompactIDR(accumulationResult.finalPortfolio)}
+                      </div>
+                      <div className="text-[10px] text-zinc-500 truncate mt-0.5">
+                        {formatIDR(accumulationResult.finalPortfolio)}
+                      </div>
+                    </div>
+
+                    <div className="p-2.5 rounded-xl bg-zinc-950/60 border border-zinc-800/60">
+                      <div className="text-[10px] font-medium text-zinc-400 uppercase tracking-wider flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-sky-400 shrink-0" />
+                        Riil (-Inflasi)
+                      </div>
+                      <div className="text-lg sm:text-2xl font-bold text-sky-400 tabular-nums mt-0.5">
+                        {formatCompactIDR(accumulationResult.finalRealPortfolio)}
+                      </div>
+                      <div className="text-[10px] text-zinc-500 truncate mt-0.5">
+                        {formatIDR(accumulationResult.finalRealPortfolio)}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-2.5 rounded-xl bg-zinc-950/80 border border-zinc-800 flex items-center justify-between gap-2">
+                    <div className="text-xs text-zinc-300 font-medium">
+                      Passive Income Bulanan:
+                    </div>
+                    <div className="text-sm sm:text-base font-bold text-teal-300 tabular-nums shrink-0">
+                      {formatCompactIDR(accumulationResult.safeMonthlyPassiveIncome)}
+                      <span className="text-xs font-normal text-zinc-400">/bln</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Secondary Metrics Row (4 Cards) */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-2.5">
+                <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-xl p-2.5 sm:p-3 space-y-0.5">
+                  <div className="text-[10px] font-medium text-zinc-400 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-slate-400 shrink-0" />
+                    <span className="truncate">Pokok (Nominal)</span>
+                  </div>
+                  <div className="text-sm sm:text-base font-bold text-zinc-200 tabular-nums">
+                    {formatCompactIDR(accumulationResult.finalPrincipal)}
                   </div>
                   <div className="text-[10px] text-zinc-500 truncate">
-                    {formatIDR(accumulationResult.finalPortfolio)}
-                  </div>
-                  <div className="pt-1 text-[10px] text-zinc-400">
-                    Thn ke-{accumParams.timeHorizonYears}
+                    {formatIDR(accumulationResult.finalPrincipal)}
                   </div>
                 </div>
 
-                {/* Card 3: Waktu Tercapai */}
-                <div className="bg-zinc-900/80 border border-zinc-800 rounded-2xl p-4 space-y-1 relative overflow-hidden group hover:border-emerald-500/40 transition-all">
-                  <div className="text-[11px] font-medium text-zinc-400 uppercase tracking-wider">
-                    Estimasi Capai FIRE
+                <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-xl p-2.5 sm:p-3 space-y-0.5">
+                  <div className="text-[10px] font-medium text-emerald-400 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+                    <span className="truncate">Gain (+{accumulationResult.gainPercentage.toFixed(0)}%)</span>
                   </div>
-                  <div className="text-base sm:text-lg font-bold tracking-tight">
-                    {accumulationResult.yearReached !== null ? (
-                      <span className="text-emerald-400 flex items-center gap-1">
-                        Tahun ke-{accumulationResult.yearReached}
-                      </span>
-                    ) : (
-                      <span className="text-amber-400 text-sm">
-                        &gt; {accumParams.timeHorizonYears} Thn
-                      </span>
-                    )}
+                  <div className="text-sm sm:text-base font-bold text-emerald-400 tabular-nums">
+                    +{formatCompactIDR(accumulationResult.finalGain)}
                   </div>
-                  <div className="text-[10px] text-zinc-400">
-                    {accumulationResult.yearReached !== null ? (
-                      <span className="text-emerald-500 font-medium">
-                        Goal Tercapai! 🎯
-                      </span>
-                    ) : (
-                      <span>Butuh top-up / horizon lebih lama</span>
-                    )}
-                  </div>
-                  <div className="pt-1 text-[10px] text-zinc-500">
-                    {accumulationResult.yearReached !== null
-                      ? `Dalam ${accumulationResult.yearReached * 12} bulan`
-                      : `Defisit Rp ${formatCompactIDR(
-                          accumulationResult.targetFIRE -
-                            accumulationResult.finalPortfolio
-                        )}`}
+                  <div className="text-[10px] text-zinc-500 truncate">
+                    +{formatIDR(accumulationResult.finalGain)}
                   </div>
                 </div>
 
-                {/* Card 4: Passive Income Bulanan */}
-                <div className="bg-zinc-900/80 border border-zinc-800 rounded-2xl p-4 space-y-1 relative overflow-hidden group hover:border-emerald-500/40 transition-all">
-                  <div className="text-[11px] font-medium text-zinc-400 uppercase tracking-wider">
-                    Passive Income Aman
+                <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-xl p-2.5 sm:p-3 space-y-0.5">
+                  <div className="text-[10px] font-medium text-purple-400 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-purple-400 shrink-0" />
+                    <span className="truncate">Pokok Riil (-Inf)</span>
                   </div>
-                  <div className="text-base sm:text-lg font-bold text-teal-300 tracking-tight">
-                    {formatCompactIDR(
-                      accumulationResult.safeMonthlyPassiveIncome
-                    )}
-                    <span className="text-xs font-normal text-zinc-400">/bln</span>
+                  <div className="text-sm sm:text-base font-bold text-purple-300 tabular-nums">
+                    {formatCompactIDR(accumulationResult.finalRealPrincipal)}
                   </div>
                   <div className="text-[10px] text-zinc-500 truncate">
-                    {formatIDR(accumulationResult.safeMonthlyPassiveIncome)}
+                    {formatIDR(accumulationResult.finalRealPrincipal)}
                   </div>
-                  <div className="pt-1 text-[10px] text-zinc-400">
-                    Dihasilkan portofolio akhir
+                </div>
+
+                <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-xl p-2.5 sm:p-3 space-y-0.5">
+                  <div className="text-[10px] font-medium text-sky-400 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-sky-400 shrink-0" />
+                    <span className="truncate">Porto Riil (-Inf)</span>
+                  </div>
+                  <div className="text-sm sm:text-base font-bold text-sky-400 tabular-nums">
+                    {formatCompactIDR(accumulationResult.finalRealPortfolio)}
+                  </div>
+                  <div className="text-[10px] text-zinc-500 truncate">
+                    {formatIDR(accumulationResult.finalRealPortfolio)}
                   </div>
                 </div>
               </div>
 
               {/* Composition Breakdown Bar */}
-              <div className="bg-zinc-900/80 border border-zinc-800 rounded-2xl p-4 space-y-2">
-                <div className="flex items-center justify-between text-xs">
+              <div className="bg-zinc-900/80 border border-zinc-800 rounded-2xl p-3.5 sm:p-4 space-y-2.5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs">
                   <span className="font-semibold text-zinc-300 flex items-center gap-1.5">
-                    <Layers className="w-3.5 h-3.5 text-emerald-400" />
-                    Komposisi Portofolio di Tahun ke-{accumParams.timeHorizonYears}
+                    <Layers className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                    Komposisi Portofolio di Tahun ke-{accumParams.timeHorizonYears} (Mulai Rp 0)
                   </span>
                   <span className="text-zinc-400 text-[11px]">
                     Bunga Bergulung:{' '}
@@ -603,7 +889,7 @@ export const FinFreedomEngine: React.FC = () => {
                           : 50
                       }%`,
                     }}
-                    title={`Modal Disetor: ${formatIDR(
+                    title={`Modal Disetor (Nominal): ${formatIDR(
                       accumulationResult.finalPrincipal
                     )}`}
                   />
@@ -624,11 +910,11 @@ export const FinFreedomEngine: React.FC = () => {
                   />
                 </div>
 
-                <div className="flex items-center justify-between text-[11px] text-zinc-400 pt-1">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] text-zinc-400 pt-1">
                   <div className="flex items-center gap-1.5">
                     <span className="w-2.5 h-2.5 rounded-full bg-slate-500" />
                     <span>
-                      Modal Disetor:{' '}
+                      Pokok Nominal:{' '}
                       <strong className="text-zinc-200">
                         {formatCompactIDR(accumulationResult.finalPrincipal)}
                       </strong>
@@ -637,42 +923,223 @@ export const FinFreedomEngine: React.FC = () => {
                   <div className="flex items-center gap-1.5">
                     <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
                     <span>
-                      Keuntungan Investasi (Bunga Bergulung):{' '}
+                      Gain Majemuk:{' '}
                       <strong className="text-emerald-400">
                         {formatCompactIDR(accumulationResult.finalGain)}
+                      </strong>
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-purple-400" />
+                    <span>
+                      Pokok Riil (-Inf):{' '}
+                      <strong className="text-purple-300">
+                        {formatCompactIDR(accumulationResult.finalRealPrincipal)}
+                      </strong>
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-sky-400" />
+                    <span>
+                      Porto Riil (-Inf):{' '}
+                      <strong className="text-sky-300">
+                        {formatCompactIDR(accumulationResult.finalRealPortfolio)}
                       </strong>
                     </span>
                   </div>
                 </div>
               </div>
 
-              {/* Recharts AreaChart */}
-              <div className="bg-zinc-900/80 border border-zinc-800 rounded-2xl p-5 shadow-lg space-y-3">
+              {/* Recharts AreaChart & Dynamic Filtering Controls */}
+              <div className="bg-zinc-900/80 border border-zinc-800 rounded-2xl p-3.5 sm:p-5 shadow-lg space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-zinc-800/80">
                   <div>
                     <h3 className="text-sm font-bold text-zinc-100 flex items-center gap-2">
-                      Visualisasi Pertumbuhan Portofolio Majemuk
+                      Visualisasi Pertumbuhan Portofolio (4 Kurva)
                     </h3>
                     <p className="text-[11px] text-zinc-400">
-                      Kurva akumulasi nilai portofolio vs target dana Financial Freedom
+                      2 Grafik Nominal + 2 Grafik Riil dikurangi Inflasi, lengkap dengan filter interaktif & ketetapan target FIRE
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-[10px] px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-300 border border-amber-500/20 font-medium">
-                      Garis Putus-putus: Target FIRE (
-                      {formatCompactIDR(accumulationResult.targetFIRE)})
+                      Target FIRE: {formatCompactIDR(accumulationResult.targetFIRE)}
                     </span>
                   </div>
                 </div>
 
-                <div className="w-full h-[360px] sm:h-[400px]">
+                {/* Unified Filter Toolbar with Integrated Live Values */}
+                <div className="bg-zinc-950/80 border border-zinc-800/90 rounded-xl p-3 space-y-2.5">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5 text-xs font-semibold text-zinc-200">
+                      <Filter className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Filter Tampilan Grafik (Klik Kurva untuk On/Off):</span>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setChartFilters({
+                          nominalPortfolio: true,
+                          nominalPrincipal: true,
+                          realPortfolio: true,
+                          realPrincipal: true,
+                        })
+                      }
+                      className="text-[10px] px-2.5 py-1 rounded bg-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-700 transition self-start sm:self-auto"
+                    >
+                      Tampilkan Semua (4 Kurva)
+                    </button>
+                  </div>
+
+                  {/* 4 Interactive Filter Cards with Live Values */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {/* Chip 1: Porto Nominal */}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setChartFilters((prev) => ({
+                          ...prev,
+                          nominalPortfolio: !prev.nominalPortfolio,
+                        }))
+                      }
+                      className={`p-2.5 rounded-xl border text-left transition-all flex flex-col justify-between ${
+                        chartFilters.nominalPortfolio
+                          ? 'bg-emerald-950/30 border-emerald-500/50 shadow-sm'
+                          : 'bg-zinc-900/40 border-zinc-800/80 opacity-60'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between text-[10px] text-zinc-400">
+                        <span className="flex items-center gap-1.5 font-medium">
+                          <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                          Porto Nominal
+                        </span>
+                        {chartFilters.nominalPortfolio ? (
+                          <Eye className="w-3 h-3 text-emerald-400" />
+                        ) : (
+                          <EyeOff className="w-3 h-3 text-zinc-500" />
+                        )}
+                      </div>
+                      <div className="text-xs sm:text-sm font-bold text-emerald-400 mt-1 tabular-nums">
+                        {formatCompactIDR(accumulationResult.finalPortfolio)}
+                      </div>
+                      <div className="text-[9px] text-zinc-500">
+                        {chartFilters.nominalPortfolio ? '● Tampil di Grafik' : '○ Sembunyi'}
+                      </div>
+                    </button>
+
+                    {/* Chip 2: Pokok Nominal */}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setChartFilters((prev) => ({
+                          ...prev,
+                          nominalPrincipal: !prev.nominalPrincipal,
+                        }))
+                      }
+                      className={`p-2.5 rounded-xl border text-left transition-all flex flex-col justify-between ${
+                        chartFilters.nominalPrincipal
+                          ? 'bg-slate-900/50 border-slate-500/50 shadow-sm'
+                          : 'bg-zinc-900/40 border-zinc-800/80 opacity-60'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between text-[10px] text-zinc-400">
+                        <span className="flex items-center gap-1.5 font-medium">
+                          <span className="w-2 h-2 rounded-full bg-slate-400" />
+                          Pokok Nominal
+                        </span>
+                        {chartFilters.nominalPrincipal ? (
+                          <Eye className="w-3 h-3 text-slate-300" />
+                        ) : (
+                          <EyeOff className="w-3 h-3 text-zinc-500" />
+                        )}
+                      </div>
+                      <div className="text-xs sm:text-sm font-bold text-slate-300 mt-1 tabular-nums">
+                        {formatCompactIDR(accumulationResult.finalPrincipal)}
+                      </div>
+                      <div className="text-[9px] text-zinc-500">
+                        {chartFilters.nominalPrincipal ? '● Tampil di Grafik' : '○ Sembunyi'}
+                      </div>
+                    </button>
+
+                    {/* Chip 3: Porto Riil (-Inf) */}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setChartFilters((prev) => ({
+                          ...prev,
+                          realPortfolio: !prev.realPortfolio,
+                        }))
+                      }
+                      className={`p-2.5 rounded-xl border text-left transition-all flex flex-col justify-between ${
+                        chartFilters.realPortfolio
+                          ? 'bg-sky-950/30 border-sky-500/50 shadow-sm'
+                          : 'bg-zinc-900/40 border-zinc-800/80 opacity-60'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between text-[10px] text-zinc-400">
+                        <span className="flex items-center gap-1.5 font-medium">
+                          <span className="w-2 h-2 rounded-full bg-sky-400" />
+                          Porto Riil (-Inf)
+                        </span>
+                        {chartFilters.realPortfolio ? (
+                          <Eye className="w-3 h-3 text-sky-400" />
+                        ) : (
+                          <EyeOff className="w-3 h-3 text-zinc-500" />
+                        )}
+                      </div>
+                      <div className="text-xs sm:text-sm font-bold text-sky-400 mt-1 tabular-nums">
+                        {formatCompactIDR(accumulationResult.finalRealPortfolio)}
+                      </div>
+                      <div className="text-[9px] text-zinc-500">
+                        {chartFilters.realPortfolio ? '● Tampil di Grafik' : '○ Sembunyi'}
+                      </div>
+                    </button>
+
+                    {/* Chip 4: Pokok Riil (-Inf) */}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setChartFilters((prev) => ({
+                          ...prev,
+                          realPrincipal: !prev.realPrincipal,
+                        }))
+                      }
+                      className={`p-2.5 rounded-xl border text-left transition-all flex flex-col justify-between ${
+                        chartFilters.realPrincipal
+                          ? 'bg-purple-950/30 border-purple-500/50 shadow-sm'
+                          : 'bg-zinc-900/40 border-zinc-800/80 opacity-60'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between text-[10px] text-zinc-400">
+                        <span className="flex items-center gap-1.5 font-medium">
+                          <span className="w-2 h-2 rounded-full bg-purple-400" />
+                          Pokok Riil (-Inf)
+                        </span>
+                        {chartFilters.realPrincipal ? (
+                          <Eye className="w-3 h-3 text-purple-300" />
+                        ) : (
+                          <EyeOff className="w-3 h-3 text-zinc-500" />
+                        )}
+                      </div>
+                      <div className="text-xs sm:text-sm font-bold text-purple-300 mt-1 tabular-nums">
+                        {formatCompactIDR(accumulationResult.finalRealPrincipal)}
+                      </div>
+                      <div className="text-[9px] text-zinc-500">
+                        {chartFilters.realPrincipal ? '● Tampil di Grafik' : '○ Sembunyi'}
+                      </div>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="w-full h-[320px] sm:h-[400px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart
                       data={accumulationResult.dataPoints}
-                      margin={{ top: 15, right: 20, left: 10, bottom: 5 }}
+                      margin={{ top: 15, right: 10, left: 0, bottom: 5 }}
                     >
                       <defs>
-                        {/* Gradient for Total Portfolio */}
+                        {/* Gradient 1: Total Portfolio Nominal */}
                         <linearGradient
                           id="portfolioGradient"
                           x1="0"
@@ -683,7 +1150,7 @@ export const FinFreedomEngine: React.FC = () => {
                           <stop
                             offset="5%"
                             stopColor="#10b981"
-                            stopOpacity={0.45}
+                            stopOpacity={0.4}
                           />
                           <stop
                             offset="95%"
@@ -692,7 +1159,7 @@ export const FinFreedomEngine: React.FC = () => {
                           />
                         </linearGradient>
 
-                        {/* Gradient for Principal */}
+                        {/* Gradient 2: Principal Nominal */}
                         <linearGradient
                           id="principalGradient"
                           x1="0"
@@ -703,11 +1170,51 @@ export const FinFreedomEngine: React.FC = () => {
                           <stop
                             offset="5%"
                             stopColor="#64748b"
-                            stopOpacity={0.35}
+                            stopOpacity={0.3}
                           />
                           <stop
                             offset="95%"
                             stopColor="#64748b"
+                            stopOpacity={0.02}
+                          />
+                        </linearGradient>
+
+                        {/* Gradient 3: Real Portfolio (-Inflasi) */}
+                        <linearGradient
+                          id="realPortfolioGradient"
+                          x1="0"
+                          y1="0"
+                          x2="0"
+                          y2="1"
+                        >
+                          <stop
+                            offset="5%"
+                            stopColor="#0ea5e9"
+                            stopOpacity={0.35}
+                          />
+                          <stop
+                            offset="95%"
+                            stopColor="#0ea5e9"
+                            stopOpacity={0.02}
+                          />
+                        </linearGradient>
+
+                        {/* Gradient 4: Real Principal (-Inflasi) */}
+                        <linearGradient
+                          id="realPrincipalGradient"
+                          x1="0"
+                          y1="0"
+                          x2="0"
+                          y2="1"
+                        >
+                          <stop
+                            offset="5%"
+                            stopColor="#a855f7"
+                            stopOpacity={0.25}
+                          />
+                          <stop
+                            offset="95%"
+                            stopColor="#a855f7"
                             stopOpacity={0.02}
                           />
                         </linearGradient>
@@ -725,6 +1232,8 @@ export const FinFreedomEngine: React.FC = () => {
                         fontSize={11}
                         tickLine={false}
                         axisLine={{ stroke: '#3f3f46' }}
+                        interval="preserveStartEnd"
+                        minTickGap={16}
                       />
 
                       <YAxis
@@ -733,10 +1242,10 @@ export const FinFreedomEngine: React.FC = () => {
                         tickLine={false}
                         axisLine={{ stroke: '#3f3f46' }}
                         tickFormatter={(val) => formatCompactIDR(val)}
-                        width={70}
+                        width={56}
                       />
 
-                      <Tooltip content={<CustomAccumulationTooltip />} />
+                      <Tooltip content={<CustomAccumulationTooltip />} cursor={{ stroke: '#52525b', strokeDasharray: '3 3' }} />
 
                       <Legend
                         verticalAlign="top"
@@ -744,7 +1253,7 @@ export const FinFreedomEngine: React.FC = () => {
                         iconType="circle"
                         wrapperStyle={{
                           paddingBottom: '12px',
-                          fontSize: '12px',
+                          fontSize: '11px',
                         }}
                       />
 
@@ -765,89 +1274,132 @@ export const FinFreedomEngine: React.FC = () => {
                         }}
                       />
 
-                      {/* Area 1: Total Portfolio */}
-                      <Area
-                        type="monotone"
-                        dataKey="totalPortfolio"
-                        name="Total Portofolio (Bunga Bergulung)"
-                        stroke="#10b981"
-                        strokeWidth={2.5}
-                        fillOpacity={1}
-                        fill="url(#portfolioGradient)"
-                        activeDot={{
-                          r: 6,
-                          stroke: '#10b981',
-                          strokeWidth: 2,
-                          fill: '#ffffff',
-                        }}
-                      />
+                      {/* Area 1: Total Portofolio (Nominal) */}
+                      {chartFilters.nominalPortfolio && (
+                        <Area
+                          type="monotone"
+                          dataKey="totalPortfolio"
+                          name="Total Portofolio (Nominal)"
+                          stroke="#10b981"
+                          strokeWidth={2.5}
+                          fillOpacity={1}
+                          fill="url(#portfolioGradient)"
+                          isAnimationActive={false}
+                          activeDot={{
+                            r: 6,
+                            stroke: '#10b981',
+                            strokeWidth: 2,
+                            fill: '#ffffff',
+                          }}
+                        />
+                      )}
 
-                      {/* Area 2: Principal (Modal Disetor) */}
-                      <Area
-                        type="monotone"
-                        dataKey="totalPrincipal"
-                        name="Total Modal Disetor (Pokok)"
-                        stroke="#94a3b8"
-                        strokeWidth={2}
-                        fillOpacity={1}
-                        fill="url(#principalGradient)"
-                      />
+                      {/* Area 2: Principal (Modal Disetor Nominal) */}
+                      {chartFilters.nominalPrincipal && (
+                        <Area
+                          type="monotone"
+                          dataKey="totalPrincipal"
+                          name="Modal Pokok Disetor (Nominal)"
+                          stroke="#94a3b8"
+                          strokeWidth={2}
+                          fillOpacity={1}
+                          fill="url(#principalGradient)"
+                          isAnimationActive={false}
+                        />
+                      )}
+
+                      {/* Area 3: Total Portofolio Riil (-Inflasi) */}
+                      {chartFilters.realPortfolio && (
+                        <Area
+                          type="monotone"
+                          dataKey="realPortfolio"
+                          name="Portofolio Riil (-Inflasi)"
+                          stroke="#0ea5e9"
+                          strokeDasharray="5 5"
+                          strokeWidth={2.5}
+                          fillOpacity={1}
+                          fill="url(#realPortfolioGradient)"
+                          isAnimationActive={false}
+                          activeDot={{
+                            r: 5,
+                            stroke: '#0ea5e9',
+                            strokeWidth: 2,
+                            fill: '#ffffff',
+                          }}
+                        />
+                      )}
+
+                      {/* Area 4: Modal Pokok Riil (-Inflasi) */}
+                      {chartFilters.realPrincipal && (
+                        <Area
+                          type="monotone"
+                          dataKey="realPrincipal"
+                          name="Modal Pokok Riil (-Inflasi)"
+                          stroke="#a855f7"
+                          strokeDasharray="4 4"
+                          strokeWidth={2}
+                          fillOpacity={1}
+                          fill="url(#realPrincipalGradient)"
+                          isAnimationActive={false}
+                        />
+                      )}
                     </AreaChart>
                   </ResponsiveContainer>
                 </div>
 
-                {/* Milestone Callout */}
-                <div className="p-3.5 rounded-xl bg-zinc-950 border border-zinc-800/80 flex items-start gap-3 text-xs">
-                  <div className="p-1 rounded-md bg-emerald-500/10 text-emerald-400 mt-0.5">
-                    <CheckCircle2 className="w-4 h-4" />
+                {/* Milestone Callout with FIRE Determination Status */}
+                <div className={`p-3.5 rounded-xl border flex items-start gap-3 text-xs ${
+                  accumulationResult.finalFireStatus === 'surplus'
+                    ? 'bg-emerald-950/20 border-emerald-800/60'
+                    : accumulationResult.finalFireStatus === 'exact'
+                    ? 'bg-sky-950/20 border-sky-800/60'
+                    : 'bg-zinc-950 border-zinc-800/80'
+                }`}>
+                  <div className={`p-1 rounded-md mt-0.5 ${
+                    accumulationResult.finalFireStatus === 'surplus'
+                      ? 'bg-emerald-500/10 text-emerald-400'
+                      : accumulationResult.finalFireStatus === 'exact'
+                      ? 'bg-sky-500/10 text-sky-400'
+                      : 'bg-amber-500/10 text-amber-400'
+                  }`}>
+                    {accumulationResult.finalFireStatus === 'surplus' ? (
+                      <CheckCircle2 className="w-4 h-4" />
+                    ) : accumulationResult.finalFireStatus === 'exact' ? (
+                      <CheckCircle2 className="w-4 h-4" />
+                    ) : (
+                      <AlertTriangle className="w-4 h-4" />
+                    )}
                   </div>
                   <div className="space-y-1">
                     <p className="font-semibold text-zinc-200">
-                      {accumulationResult.yearReached !== null
-                        ? `Analisis: Target Financial Freedom Tercapai di Tahun ke-${accumulationResult.yearReached}`
-                        : `Analisis: Belum Menyentuh Target dalam ${accumParams.timeHorizonYears} Tahun`}
+                      {accumulationResult.finalFireStatus === 'surplus'
+                        ? `Analisis Ketetapan: Target Financial Freedom TERCAPAI DENGAN SURPLUS +${formatCompactIDR(accumulationResult.finalFireDelta)} (+${accumulationResult.finalFireDeltaPercent}%)`
+                        : accumulationResult.finalFireStatus === 'exact'
+                        ? 'Analisis Ketetapan: Target Financial Freedom TERCAPAI TEPAT PAS (100.0%)'
+                        : `Analisis Ketetapan: Target Financial Freedom BELUM TERCAPAI (DEFISIT -${formatCompactIDR(Math.abs(accumulationResult.finalFireDelta))} / ${accumulationResult.finalFireDeltaPercent}%)`}
                     </p>
                     <p className="text-zinc-400 leading-relaxed text-[11px]">
                       {accumulationResult.yearReached !== null ? (
                         <>
-                          Dengan modal awal{' '}
-                          <strong className="text-zinc-200">
-                            {formatCompactIDR(accumParams.initialCapital)}
-                          </strong>{' '}
-                          dan konsistensi investasi rutin bulanan{' '}
-                          <strong className="text-zinc-200">
-                            {formatCompactIDR(accumParams.monthlyInvestment)}
-                          </strong>{' '}
-                          pada imbal hasil bersih{' '}
-                          <strong className="text-emerald-400">
-                            {accumParams.annualReturn}%
+                          Dimulai dari modal awal <strong className="text-zinc-200">Rp 0</strong> dan konsistensi investasi rutin bulanan{' '}
+                          <strong className="text-zinc-200">{formatCompactIDR(accumParams.monthlyInvestment)}</strong> (imbal hasil {accumParams.annualReturn}%), target dana FIRE {formatCompactIDR(accumulationResult.targetFIRE)} pertama kali tersentuh pada <strong className="text-emerald-400">Tahun ke-{accumulationResult.yearReached}</strong>.
+                          Di tahun ke-{accumParams.timeHorizonYears}, akumulasi portofolio Anda mencapai{' '}
+                          <strong className="text-emerald-400">{formatIDR(accumulationResult.finalPortfolio)}</strong> dengan status{' '}
+                          <strong className={accumulationResult.finalFireStatus === 'surplus' ? 'text-emerald-400' : 'text-sky-400'}>
+                            {accumulationResult.finalFireStatus === 'surplus'
+                              ? `SURPLUS +${formatIDR(accumulationResult.finalFireDelta)} (+${accumulationResult.finalFireDeltaPercent}% di atas target)`
+                              : 'TEPAT PAS (100%)'}
                           </strong>
-                          , portofolio Anda akan menghasilkan pasif income aman{' '}
-                          <strong className="text-emerald-400">
-                            {formatIDR(
-                              accumulationResult.safeMonthlyPassiveIncome
-                            )}
-                            /bulan
-                          </strong>
-                          , melampaui target gaya hidup Rp{' '}
-                          {formatNumberWithDots(accumParams.targetMonthlyExpense)}
-                          /bulan.
+                          , menghasilkan passive income aman{' '}
+                          <strong className="text-emerald-400">{formatIDR(accumulationResult.safeMonthlyPassiveIncome)}/bulan</strong>.
                         </>
                       ) : (
                         <>
-                          Portofolio Anda mencapai{' '}
-                          <strong className="text-zinc-200">
-                            {formatCompactIDR(accumulationResult.finalPortfolio)}
-                          </strong>
-                          , namun masih berjarak{' '}
-                          <strong className="text-amber-400">
-                            {formatCompactIDR(
-                              accumulationResult.targetFIRE -
-                                accumulationResult.finalPortfolio
-                            )}
-                          </strong>{' '}
-                          dari target aman FIRE. Coba tingkatkan investasi bulanan
-                          atau perpanjang horison waktu investasi beberapa tahun.
+                          Dimulai dari modal awal Rp 0, portofolio Anda pada akhir horison ({accumParams.timeHorizonYears} tahun) mencapai{' '}
+                          <strong className="text-zinc-200">{formatCompactIDR(accumulationResult.finalPortfolio)}</strong> ({accumulationResult.achievementPercentage}% dari target), namun masih mengalami status{' '}
+                          <strong className="text-rose-400">
+                            DEFISIT -{formatIDR(Math.abs(accumulationResult.finalFireDelta))} ({Math.abs(accumulationResult.finalFireDeltaPercent)}% di bawah target aman FIRE)
+                          </strong>. Coba tingkatkan investasi bulanan atau perpanjang horison beberapa tahun agar status menjadi pas atau surplus.
                         </>
                       )}
                     </p>
@@ -864,8 +1416,8 @@ export const FinFreedomEngine: React.FC = () => {
         {activeTab === 'decumulation' && (
           <>
             {/* Left Column: Decumulation Controls */}
-            <div className="lg:col-span-5 space-y-5">
-              <div className="bg-zinc-900/70 border border-zinc-800 rounded-2xl p-5 shadow-lg space-y-5">
+            <div className={`lg:col-span-5 space-y-4 sm:space-y-5 ${mobileView === 'results' ? 'hidden lg:block' : 'block'}`}>
+              <div className="bg-zinc-900/70 border border-zinc-800 rounded-2xl p-3.5 sm:p-5 shadow-lg space-y-3.5 sm:space-y-5">
                 <div className="flex items-center justify-between pb-3 border-b border-zinc-800/80">
                   <div className="flex items-center gap-2">
                     <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/20">
@@ -883,7 +1435,7 @@ export const FinFreedomEngine: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setDecumParams(defaultDecumulationParams)}
-                    className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-colors"
+                    className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-colors shrink-0"
                     title="Reset ke Nilai Standar"
                   >
                     <RotateCcw className="w-3.5 h-3.5" />
@@ -912,7 +1464,7 @@ export const FinFreedomEngine: React.FC = () => {
 
                 {/* 2. Pengeluaran Hidup Tahun Pertama */}
                 <div className="space-y-2">
-                  <div className="flex items-center justify-between text-xs">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 text-xs">
                     <span className="text-zinc-300 font-medium">
                       Pengeluaran Hidup Tahun Pertama
                     </span>
@@ -960,7 +1512,7 @@ export const FinFreedomEngine: React.FC = () => {
                       accentColor="amber"
                     />
                   ) : (
-                    <div className="p-3 bg-zinc-950/80 rounded-xl border border-zinc-800 text-xs flex justify-between items-center">
+                    <div className="p-3 bg-zinc-950/80 rounded-xl border border-zinc-800 text-xs flex flex-col sm:flex-row sm:justify-between sm:items-center gap-1">
                       <span className="text-zinc-400">
                         Penarikan Awal Tahun ke-1:
                       </span>
@@ -1060,21 +1612,57 @@ export const FinFreedomEngine: React.FC = () => {
                     Aturan 4% (Bengen / Trinity Study 1998) dirancang berdasarkan pasar obligasi & saham AS dengan inflasi historis rendah (2-3%). Di Indonesia, inflasi riil kebutuhan pensiun lebih tinggi, sehingga para perencana keuangan independen Indonesia menyarankan rasio penarikan maksimal <strong>3.0% - 3.25%</strong>.
                   </p>
                 </div>
+
+                {/* Mobile Quick Action Bar to View Results */}
+                <div className="lg:hidden pt-3 border-t border-zinc-800 flex items-center justify-between">
+                  <div>
+                    <div className="text-[10px] text-zinc-400">Saldo Pensiun: {formatCompactIDR(decumParams.initialRetirementBalance)}</div>
+                    <div className="text-xs font-bold text-amber-400">
+                      {decumulationResult.standardFailureYear !== null
+                        ? `4% Gagal Thn ke-${decumulationResult.standardFailureYear}`
+                        : 'Kedua Skenario Aman ✨'}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setMobileView('results')}
+                    className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-rose-600 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-amber-500/20 active:scale-95 transition"
+                  >
+                    <span>Lihat Grafik</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
             </div>
 
             {/* Right Column: Decumulation Stats & Graphs */}
-            <div className="lg:col-span-7 space-y-5">
+            <div className={`lg:col-span-7 space-y-4 sm:space-y-5 ${mobileView === 'params' ? 'hidden lg:block' : 'block'}`}>
+              {/* Mobile Back Button to Params */}
+              {mobileView === 'results' && (
+                <div className="lg:hidden flex items-center justify-between pb-1">
+                  <button
+                    type="button"
+                    onClick={() => setMobileView('params')}
+                    className="text-xs px-3 py-1.5 rounded-lg bg-zinc-800 text-zinc-300 hover:text-white flex items-center gap-1.5 border border-zinc-700/80 transition"
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                    <span>Ubah Parameter Input</span>
+                  </button>
+                  <span className="text-[11px] text-zinc-400">
+                    Pensiun {decumParams.retirementYears} Tahun
+                  </span>
+                </div>
+              )}
               {/* Failure Alert Banner if standard 4% runs out */}
               {decumulationResult.standardFailureYear !== null ? (
-                <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex items-start gap-3 text-rose-200">
+                <div className="p-3.5 sm:p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex items-start gap-3 text-rose-200">
                   <div className="p-1.5 rounded-lg bg-rose-500/20 text-rose-400 shrink-0 mt-0.5">
                     <AlertTriangle className="w-5 h-5" />
                   </div>
-                  <div className="space-y-1 text-xs">
-                    <div className="font-bold text-sm text-rose-400 flex items-center gap-2">
-                      ⚠️ Portfolio Failure Terdeteksi pada SWR 4.0%
-                      <span className="text-[10px] px-2 py-0.2 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/40">
+                  <div className="space-y-1 text-xs min-w-0">
+                    <div className="font-bold text-xs sm:text-sm text-rose-400 flex flex-wrap items-center gap-1.5">
+                      <span>⚠️ Portfolio Failure Terdeteksi pada SWR 4.0%</span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/40">
                         Habis di Tahun ke-{decumulationResult.standardFailureYear}
                       </span>
                     </div>
@@ -1096,7 +1684,7 @@ export const FinFreedomEngine: React.FC = () => {
                     <CheckCircle2 className="w-5 h-5" />
                   </div>
                   <div className="space-y-0.5 text-xs">
-                    <div className="font-bold text-sm text-emerald-400">
+                    <div className="font-bold text-xs sm:text-sm text-emerald-400">
                       Kedua Skenario Sukses Melewati {decumParams.retirementYears} Tahun!
                     </div>
                     <p className="text-zinc-300 text-[11px]">
@@ -1107,10 +1695,10 @@ export const FinFreedomEngine: React.FC = () => {
               )}
 
               {/* Stat Cards Grid (4 Cards) */}
-              <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
                 {/* Card 1: Saldo Akhir SWR 4.0% */}
-                <div className="bg-zinc-900/80 border border-zinc-800 rounded-2xl p-4 space-y-1 relative overflow-hidden group hover:border-zinc-700 transition-all">
-                  <div className="text-[11px] font-medium text-zinc-400 uppercase tracking-wider flex items-center justify-between">
+                <div className="bg-zinc-900/80 border border-zinc-800 rounded-2xl p-3 sm:p-4 space-y-1 relative overflow-hidden group hover:border-zinc-700 transition-all">
+                  <div className="text-[10px] sm:text-[11px] font-medium text-zinc-400 uppercase tracking-wider flex items-center justify-between">
                     <span>SWR 4.0% (Standar)</span>
                   </div>
                   <div className="text-base sm:text-lg font-bold tracking-tight">
@@ -1139,9 +1727,9 @@ export const FinFreedomEngine: React.FC = () => {
                 </div>
 
                 {/* Card 2: Saldo Akhir SWR 3.25% */}
-                <div className="bg-zinc-900/80 border border-zinc-800 rounded-2xl p-4 space-y-1 relative overflow-hidden group hover:border-emerald-500/40 transition-all">
-                  <div className="text-[11px] font-medium text-emerald-400 uppercase tracking-wider flex items-center justify-between">
-                    <span>SWR 3.25% (Adaptasi ID)</span>
+                <div className="bg-zinc-900/80 border border-zinc-800 rounded-2xl p-3 sm:p-4 space-y-1 relative overflow-hidden group hover:border-emerald-500/40 transition-all">
+                  <div className="text-[10px] sm:text-[11px] font-medium text-emerald-400 uppercase tracking-wider flex items-center justify-between">
+                    <span>SWR 3.25% (ID)</span>
                   </div>
                   <div className="text-base sm:text-lg font-bold text-emerald-400 tracking-tight">
                     {decumulationResult.conservativeFailureYear !== null ? (
@@ -1171,8 +1759,8 @@ export const FinFreedomEngine: React.FC = () => {
                 </div>
 
                 {/* Card 3: Total Ditarik SWR 4% */}
-                <div className="bg-zinc-900/80 border border-zinc-800 rounded-2xl p-4 space-y-1 relative overflow-hidden group hover:border-zinc-700 transition-all">
-                  <div className="text-[11px] font-medium text-zinc-400 uppercase tracking-wider">
+                <div className="bg-zinc-900/80 border border-zinc-800 rounded-2xl p-3 sm:p-4 space-y-1 relative overflow-hidden group hover:border-zinc-700 transition-all">
+                  <div className="text-[10px] sm:text-[11px] font-medium text-zinc-400 uppercase tracking-wider">
                     Total Ditarik (4.0%)
                   </div>
                   <div className="text-base sm:text-lg font-bold text-zinc-200 tracking-tight">
@@ -1189,8 +1777,8 @@ export const FinFreedomEngine: React.FC = () => {
                 </div>
 
                 {/* Card 4: Total Ditarik SWR 3.25% */}
-                <div className="bg-zinc-900/80 border border-zinc-800 rounded-2xl p-4 space-y-1 relative overflow-hidden group hover:border-zinc-700 transition-all">
-                  <div className="text-[11px] font-medium text-emerald-400 uppercase tracking-wider">
+                <div className="bg-zinc-900/80 border border-zinc-800 rounded-2xl p-3 sm:p-4 space-y-1 relative overflow-hidden group hover:border-zinc-700 transition-all">
+                  <div className="text-[10px] sm:text-[11px] font-medium text-emerald-400 uppercase tracking-wider">
                     Total Ditarik (3.25%)
                   </div>
                   <div className="text-base sm:text-lg font-bold text-emerald-400 tracking-tight">
@@ -1208,7 +1796,7 @@ export const FinFreedomEngine: React.FC = () => {
               </div>
 
               {/* Recharts LineChart */}
-              <div className="bg-zinc-900/80 border border-zinc-800 rounded-2xl p-5 shadow-lg space-y-3">
+              <div className="bg-zinc-900/80 border border-zinc-800 rounded-2xl p-3.5 sm:p-5 shadow-lg space-y-3">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-zinc-800/80">
                   <div>
                     <h3 className="text-sm font-bold text-zinc-100 flex items-center gap-2">
@@ -1283,6 +1871,8 @@ export const FinFreedomEngine: React.FC = () => {
                         fontSize={11}
                         tickLine={false}
                         axisLine={{ stroke: '#3f3f46' }}
+                        interval="preserveStartEnd"
+                        minTickGap={16}
                       />
 
                       <YAxis
@@ -1291,10 +1881,10 @@ export const FinFreedomEngine: React.FC = () => {
                         tickLine={false}
                         axisLine={{ stroke: '#3f3f46' }}
                         tickFormatter={(val) => formatCompactIDR(val)}
-                        width={70}
+                        width={56}
                       />
 
-                      <Tooltip content={<CustomDecumulationTooltip />} />
+                      <Tooltip content={<CustomDecumulationTooltip />} cursor={{ stroke: '#52525b', strokeDasharray: '3 3' }} />
 
                       <Legend
                         verticalAlign="top"
@@ -1328,6 +1918,7 @@ export const FinFreedomEngine: React.FC = () => {
                         strokeWidth={2.5}
                         fillOpacity={1}
                         fill="url(#standardDecumGradient)"
+                        isAnimationActive={false}
                         activeDot={{
                           r: 6,
                           stroke: '#f43f5e',
@@ -1345,6 +1936,7 @@ export const FinFreedomEngine: React.FC = () => {
                         strokeWidth={2.5}
                         fillOpacity={1}
                         fill="url(#conservativeDecumGradient)"
+                        isAnimationActive={false}
                         activeDot={{
                           r: 6,
                           stroke: '#10b981',
@@ -1402,49 +1994,117 @@ export const FinFreedomEngine: React.FC = () => {
         </button>
 
         {showTableModal && (
-          <div className="mt-4 pt-4 border-t border-zinc-800 overflow-x-auto">
-            {activeTab === 'accumulation' ? (
-              <table className="w-full text-left text-xs text-zinc-300">
-                <thead className="text-[10px] uppercase bg-zinc-950/80 text-zinc-400 border-b border-zinc-800">
-                  <tr>
-                    <th className="py-2.5 px-3">Tahun</th>
-                    <th className="py-2.5 px-3">Modal Pokok Disetor</th>
-                    <th className="py-2.5 px-3">Bunga Bergulung (Gain)</th>
-                    <th className="py-2.5 px-3">Total Portofolio (Nominal)</th>
-                    <th className="py-2.5 px-3">Nilai Riil (Daya Beli)</th>
-                    <th className="py-2.5 px-3">Status FIRE</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-800/60 font-mono text-[11px]">
-                  {accumulationResult.dataPoints.map((row) => (
-                    <tr
-                      key={row.year}
-                      className={`hover:bg-zinc-800/40 transition-colors ${
-                        row.isReached ? 'bg-emerald-500/5' : ''
-                      }`}
-                    >
-                      <td className="py-2 px-3 font-sans font-semibold text-zinc-200">
-                        {row.label}
+          <div className="mt-4 pt-4 border-t border-zinc-800 space-y-2">
+            <div className="flex sm:hidden items-center gap-1.5 text-[11px] text-zinc-400">
+              <Info className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+              <span>Geser tabel ke samping untuk melihat seluruh kolom data ➔</span>
+            </div>
+
+            <div className="overflow-x-auto">
+              {activeTab === 'accumulation' ? (
+                <table className="w-full text-left text-xs text-zinc-300 min-w-[780px]">
+                  <thead className="text-[10px] uppercase bg-zinc-950/80 text-zinc-400 border-b border-zinc-800">
+                    <tr>
+                      <th className="py-2.5 px-3 sticky left-0 bg-zinc-950 z-10 border-r border-zinc-800">Tahun</th>
+                      <th className="py-2.5 px-3">
+                        <div className="flex items-center gap-1">
+                          <span className="w-2 h-2 rounded-full bg-slate-400" />
+                          <span>Pokok (Nominal)</span>
+                        </div>
+                        <div className="text-[9px] font-normal normal-case text-zinc-500">
+                          {chartFilters.nominalPrincipal ? '● Grafik On' : '○ Preview Aktif'}
+                        </div>
+                      </th>
+                      <th className="py-2.5 px-3">
+                        <div className="flex items-center gap-1">
+                          <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                          <span>Portofolio (Nominal)</span>
+                        </div>
+                        <div className="text-[9px] font-normal normal-case text-zinc-500">
+                          {chartFilters.nominalPortfolio ? '● Grafik On' : '○ Preview Aktif'}
+                        </div>
+                      </th>
+                      <th className="py-2.5 px-3">
+                        <div className="flex items-center gap-1">
+                          <span className="w-2 h-2 rounded-full bg-purple-400" />
+                          <span>Pokok Riil (-Inf)</span>
+                        </div>
+                        <div className="text-[9px] font-normal normal-case text-zinc-500">
+                          {chartFilters.realPrincipal ? '● Grafik On' : '○ Preview Aktif'}
+                        </div>
+                      </th>
+                      <th className="py-2.5 px-3">
+                        <div className="flex items-center gap-1">
+                          <span className="w-2 h-2 rounded-full bg-sky-400" />
+                          <span>Portofolio Riil (-Inf)</span>
+                        </div>
+                        <div className="text-[9px] font-normal normal-case text-zinc-500">
+                          {chartFilters.realPortfolio ? '● Grafik On' : '○ Preview Aktif'}
+                        </div>
+                      </th>
+                      <th className="py-2.5 px-3">Bunga Bergulung (Gain)</th>
+                      <th className="py-2.5 px-3 bg-zinc-950/90 border-l border-zinc-800">
+                        <div>Ketetapan Target FIRE</div>
+                        <div className="text-[9px] font-normal normal-case text-zinc-500">
+                          Target: {formatCompactIDR(accumulationResult.targetFIRE)}
+                        </div>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-800/60 font-mono text-[11px]">
+                    {accumulationResult.dataPoints.map((row) => (
+                      <tr
+                        key={row.year}
+                        className={`hover:bg-zinc-800/40 transition-colors ${
+                          row.isReached ? 'bg-emerald-500/5' : ''
+                        }`}
+                      >
+                        <td className="py-2 px-3 font-sans font-semibold text-zinc-200 sticky left-0 bg-zinc-950/95 z-10 border-r border-zinc-800/80">
+                          {row.label}
+                        </td>
+                      <td className="py-2 px-3 text-slate-300">
+                        {formatIDR(row.totalPrincipal)}
                       </td>
-                      <td className="py-2 px-3">{formatIDR(row.totalPrincipal)}</td>
-                      <td className="py-2 px-3 text-emerald-400 font-medium">
-                        +{formatIDR(row.compoundGain)}
-                      </td>
-                      <td className="py-2 px-3 font-bold text-zinc-100">
+                      <td className="py-2 px-3 font-bold text-emerald-400">
                         {formatIDR(row.totalPortfolio)}
                       </td>
-                      <td className="py-2 px-3 text-zinc-400">
+                      <td className="py-2 px-3 text-purple-300">
+                        {formatIDR(row.realPrincipal)}
+                      </td>
+                      <td className="py-2 px-3 font-semibold text-sky-400">
                         {formatIDR(row.realPortfolio)}
                       </td>
-                      <td className="py-2 px-3 font-sans">
-                        {row.isReached ? (
-                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                            ✓ Bebas Finansial
-                          </span>
+                      <td className="py-2 px-3 text-teal-400 font-medium">
+                        +{formatIDR(row.compoundGain)}
+                      </td>
+                      <td className="py-2 px-3 font-sans border-l border-zinc-800/60">
+                        {row.fireStatus === 'surplus' ? (
+                          <div className="flex flex-col">
+                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 inline-block w-fit">
+                              ✓ Surplus +{formatCompactIDR(row.fireDelta)}
+                            </span>
+                            <span className="text-[9px] text-emerald-400/80 mt-0.5">
+                              +{row.fireDeltaPercent}% di atas target
+                            </span>
+                          </div>
+                        ) : row.fireStatus === 'exact' ? (
+                          <div className="flex flex-col">
+                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-sky-500/10 text-sky-400 border border-sky-500/20 inline-block w-fit">
+                              ✓ Pas 100% (Rp 0)
+                            </span>
+                            <span className="text-[9px] text-sky-400/80 mt-0.5">
+                              Tepat sesuai target
+                            </span>
+                          </div>
                         ) : (
-                          <span className="text-[10px] text-zinc-500">
-                            Akumulasi
-                          </span>
+                          <div className="flex flex-col">
+                            <span className="text-[10px] text-zinc-400 px-2 py-0.5 rounded-full bg-zinc-800/80 border border-zinc-700/60 inline-block w-fit">
+                              - Defisit {formatCompactIDR(Math.abs(row.fireDelta))}
+                            </span>
+                            <span className="text-[9px] text-zinc-500 mt-0.5">
+                              {row.fireDeltaPercent}% dari target
+                            </span>
+                          </div>
                         )}
                       </td>
                     </tr>
@@ -1452,10 +2112,10 @@ export const FinFreedomEngine: React.FC = () => {
                 </tbody>
               </table>
             ) : (
-              <table className="w-full text-left text-xs text-zinc-300">
+              <table className="w-full text-left text-xs text-zinc-300 min-w-[680px]">
                 <thead className="text-[10px] uppercase bg-zinc-950/80 text-zinc-400 border-b border-zinc-800">
                   <tr>
-                    <th className="py-2.5 px-3">Tahun Pensiun</th>
+                    <th className="py-2.5 px-3 sticky left-0 bg-zinc-950 z-10 border-r border-zinc-800">Tahun Pensiun</th>
                     <th className="py-2.5 px-3">Penarikan 4.0%</th>
                     <th className="py-2.5 px-3">Sisa Saldo SWR 4.0%</th>
                     <th className="py-2.5 px-3">Penarikan 3.25%</th>
@@ -1473,7 +2133,7 @@ export const FinFreedomEngine: React.FC = () => {
                           : ''
                       }`}
                     >
-                      <td className="py-2 px-3 font-sans font-semibold text-zinc-200">
+                      <td className="py-2 px-3 font-sans font-semibold text-zinc-200 sticky left-0 bg-zinc-950/95 z-10 border-r border-zinc-800/80">
                         {row.label}
                       </td>
                       <td className="py-2 px-3 text-zinc-400">
@@ -1520,6 +2180,7 @@ export const FinFreedomEngine: React.FC = () => {
                 </tbody>
               </table>
             )}
+            </div>
           </div>
         )}
       </div>
@@ -1543,10 +2204,10 @@ const CustomAccumulationTooltip: React.FC<CustomTooltipProps> = ({
   label,
 }) => {
   if (active && payload && payload.length) {
-    const data = payload[0].payload;
+    const data = payload[0].payload as AccumulationDataPoint;
     return (
-      <div className="bg-zinc-950/95 border border-zinc-700/90 p-3.5 rounded-xl shadow-2xl backdrop-blur-md text-xs space-y-2 min-w-[240px]">
-        <div className="flex items-center justify-between pb-1.5 border-b border-zinc-800">
+      <div className="bg-zinc-950/95 border border-zinc-700/90 p-2.5 sm:p-3.5 rounded-xl shadow-2xl backdrop-blur-md text-[11px] sm:text-xs space-y-1.5 sm:space-y-2 min-w-[205px] sm:min-w-[270px] max-w-[85vw]">
+        <div className="flex items-center justify-between gap-2 pb-1.5 border-b border-zinc-800">
           <span className="font-bold text-zinc-200">{label}</span>
           {data.isReached && (
             <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-semibold">
@@ -1555,37 +2216,71 @@ const CustomAccumulationTooltip: React.FC<CustomTooltipProps> = ({
           )}
         </div>
 
-        <div className="space-y-1.5">
-          <div className="flex items-center justify-between">
+        <div className="space-y-1 sm:space-y-1.5">
+          <div className="flex items-center justify-between gap-3">
             <span className="text-zinc-400 flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-emerald-500" />
-              Total Portofolio:
+              <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+              Porto Nominal:
             </span>
-            <span className="font-bold text-emerald-400">
+            <span className="font-bold text-emerald-400 tabular-nums">
               {formatIDR(data.totalPortfolio)}
             </span>
           </div>
 
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-3">
             <span className="text-zinc-400 flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-slate-400" />
-              Modal Pokok Disetor:
+              <span className="w-2 h-2 rounded-full bg-slate-400 shrink-0" />
+              Pokok Nominal:
             </span>
-            <span className="font-semibold text-zinc-300">
+            <span className="font-semibold text-zinc-300 tabular-nums">
               {formatIDR(data.totalPrincipal)}
             </span>
           </div>
 
-          <div className="flex items-center justify-between">
-            <span className="text-zinc-400">Bunga Bergulung (Gain):</span>
-            <span className="font-semibold text-teal-300">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-zinc-400 flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-sky-400 shrink-0" />
+              Porto Riil (-Inf):
+            </span>
+            <span className="font-semibold text-sky-400 tabular-nums">
+              {formatIDR(data.realPortfolio)}
+            </span>
+          </div>
+
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-zinc-400 flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-purple-400 shrink-0" />
+              Pokok Riil (-Inf):
+            </span>
+            <span className="font-semibold text-purple-300 tabular-nums">
+              {formatIDR(data.realPrincipal)}
+            </span>
+          </div>
+
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-zinc-400">Bunga Bergulung:</span>
+            <span className="font-semibold text-teal-300 tabular-nums">
               +{formatIDR(data.compoundGain)}
             </span>
           </div>
 
-          <div className="flex items-center justify-between text-[11px] text-zinc-500 pt-1 border-t border-zinc-800/80">
-            <span>Daya Beli Riil (Inflasi):</span>
-            <span>{formatIDR(data.realPortfolio)}</span>
+          <div className="flex items-center justify-between gap-2 text-[10px] sm:text-[11px] pt-1.5 border-t border-zinc-800/80">
+            <span className="text-zinc-400">Target FIRE:</span>
+            <span
+              className={`font-semibold tabular-nums ${
+                data.fireStatus === 'surplus'
+                  ? 'text-emerald-400'
+                  : data.fireStatus === 'exact'
+                  ? 'text-sky-400'
+                  : 'text-rose-400'
+              }`}
+            >
+              {data.fireStatus === 'surplus'
+                ? `+${formatCompactIDR(data.fireDelta)} (+${data.fireDeltaPercent}%)`
+                : data.fireStatus === 'exact'
+                ? 'Pas 100% (Rp 0)'
+                : `-${formatCompactIDR(Math.abs(data.fireDelta))} (${data.fireDeltaPercent}%)`}
+            </span>
           </div>
         </div>
       </div>
@@ -1602,53 +2297,53 @@ const CustomDecumulationTooltip: React.FC<CustomTooltipProps> = ({
   if (active && payload && payload.length) {
     const data = payload[0].payload;
     return (
-      <div className="bg-zinc-950/95 border border-zinc-700/90 p-3.5 rounded-xl shadow-2xl backdrop-blur-md text-xs space-y-2 min-w-[260px]">
+      <div className="bg-zinc-950/95 border border-zinc-700/90 p-2.5 sm:p-3.5 rounded-xl shadow-2xl backdrop-blur-md text-[11px] sm:text-xs space-y-2 min-w-[205px] sm:min-w-[260px] max-w-[85vw]">
         <div className="flex items-center justify-between pb-1.5 border-b border-zinc-800">
           <span className="font-bold text-zinc-200">{label} Pensiun</span>
         </div>
 
-        <div className="space-y-2">
+        <div className="space-y-1.5 sm:space-y-2">
           {/* SWR 4% */}
           <div className="p-2 rounded-lg bg-zinc-900/60 border border-zinc-800/60 space-y-1">
-            <div className="flex items-center justify-between font-semibold">
+            <div className="flex items-center justify-between gap-2 font-semibold">
               <span className="text-rose-400 flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-rose-500" />
-                SWR 4.0% (Standar AS)
+                <span className="w-2 h-2 rounded-full bg-rose-500 shrink-0" />
+                SWR 4.0%
               </span>
               <span
                 className={
-                  data.isStandardDepleted ? 'text-rose-400' : 'text-zinc-200'
+                  data.isStandardDepleted ? 'text-rose-400 tabular-nums' : 'text-zinc-200 tabular-nums'
                 }
               >
                 {formatIDR(data.balanceStandard)}
               </span>
             </div>
-            <div className="flex items-center justify-between text-[11px] text-zinc-400">
-              <span>Penarikan thn ini:</span>
-              <span>{formatIDR(data.withdrawalStandard)}</span>
+            <div className="flex items-center justify-between gap-2 text-[10px] sm:text-[11px] text-zinc-400">
+              <span>Penarikan:</span>
+              <span className="tabular-nums">{formatIDR(data.withdrawalStandard)}</span>
             </div>
           </div>
 
           {/* SWR 3.25% */}
           <div className="p-2 rounded-lg bg-emerald-950/20 border border-emerald-900/40 space-y-1">
-            <div className="flex items-center justify-between font-semibold">
+            <div className="flex items-center justify-between gap-2 font-semibold">
               <span className="text-emerald-400 flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                SWR 3.25% (Adaptasi ID)
+                <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+                SWR 3.25% (ID)
               </span>
               <span
                 className={
                   data.isConservativeDepleted
-                    ? 'text-rose-400'
-                    : 'text-emerald-300'
+                    ? 'text-rose-400 tabular-nums'
+                    : 'text-emerald-300 tabular-nums'
                 }
               >
                 {formatIDR(data.balanceConservative)}
               </span>
             </div>
-            <div className="flex items-center justify-between text-[11px] text-zinc-400">
-              <span>Penarikan thn ini:</span>
-              <span>{formatIDR(data.withdrawalConservative)}</span>
+            <div className="flex items-center justify-between gap-2 text-[10px] sm:text-[11px] text-zinc-400">
+              <span>Penarikan:</span>
+              <span className="tabular-nums">{formatIDR(data.withdrawalConservative)}</span>
             </div>
           </div>
         </div>
