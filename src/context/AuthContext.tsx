@@ -35,12 +35,69 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [scenarios, setScenarios] = useState<SavedScenario[]>([]);
   const [activeScenarioId, setActiveScenarioId] = useState<string | null>(null);
 
-  // Initialize scenarios from local storage on mount
+  // Fetch user profile and sync with Google Drive
+  const fetchGoogleUserInfo = useCallback(
+    async (token: string, currentScenarios?: SavedScenario[]) => {
+      try {
+        setSyncStatus('syncing');
+        const userRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (userRes.ok) {
+          const info = await userRes.json();
+          const profile: UserProfile = {
+            id: info.sub,
+            name: info.name,
+            email: info.email,
+            avatarUrl: info.picture,
+            isDemoUser: false,
+          };
+          setUser(profile);
+
+          // Sync with Google Drive
+          const activeScenarios = currentScenarios || scenarios;
+          const syncResult = await syncWithGoogleDrive(token, activeScenarios);
+          if (syncResult.success) {
+            setScenarios(syncResult.syncedScenarios);
+            setSyncStatus('synced');
+            setLastSyncedAt(new Date());
+          }
+        } else {
+          setSyncStatus('error');
+        }
+      } catch (err) {
+        console.error('Error fetching userinfo from Google:', err);
+        setSyncStatus('error');
+      }
+    },
+    [scenarios]
+  );
+
+  // Initialize scenarios from local storage on mount & check for OAuth redirect token
   useEffect(() => {
     const local = getLocalScenarios();
     setScenarios(local);
 
-    // Restore cached session if any
+    // 1. Check if returning from Google OAuth Redirect flow (#access_token=...)
+    if (typeof window !== 'undefined' && window.location.hash && window.location.hash.includes('access_token')) {
+      try {
+        const hash = window.location.hash.startsWith('#')
+          ? window.location.hash.substring(1)
+          : window.location.hash;
+        const params = new URLSearchParams(hash);
+        const token = params.get('access_token');
+        if (token) {
+          window.history.replaceState(null, '', window.location.pathname + window.location.search);
+          setAccessToken(token);
+          fetchGoogleUserInfo(token, local);
+          return;
+        }
+      } catch (err) {
+        console.error('Failed to parse OAuth redirect hash:', err);
+      }
+    }
+
+    // 2. Restore cached session if any
     try {
       const cached = localStorage.getItem(USER_SESSION_KEY);
       if (cached) {
@@ -55,7 +112,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch {
       // ignore
     }
-  }, []);
+  }, [fetchGoogleUserInfo]);
 
   // Save session changes
   useEffect(() => {
@@ -103,88 +160,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [scenarios]);
 
-  // Handle token response from Google
-  const handleTokenCallback = useCallback(
-    async (tokenResponse: any) => {
-      if (tokenResponse && tokenResponse.access_token) {
-        const token = tokenResponse.access_token;
-        setAccessToken(token);
-
-        try {
-          const userRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          if (userRes.ok) {
-            const info = await userRes.json();
-            const profile: UserProfile = {
-              id: info.sub,
-              name: info.name,
-              email: info.email,
-              avatarUrl: info.picture,
-              isDemoUser: false,
-            };
-            setUser(profile);
-            setSyncStatus('syncing');
-
-            // Sync with Google Drive
-            const syncResult = await syncWithGoogleDrive(token, scenarios);
-            if (syncResult.success) {
-              setScenarios(syncResult.syncedScenarios);
-              setSyncStatus('synced');
-              setLastSyncedAt(new Date());
-            }
-          }
-        } catch (err) {
-          console.error('Error fetching userinfo from Google:', err);
-        }
-      }
-    },
-    [scenarios]
-  );
-
-  const tokenClientRef = React.useRef<any>(null);
-
-  // Initialize Google Token Client once when Google Identity Services is ready
-  useEffect(() => {
-    if (typeof window === 'undefined' || !GOOGLE_CLIENT_ID) return;
-
-    const setupClient = () => {
-      const google = (window as any).google;
-      if (google?.accounts?.oauth2 && !tokenClientRef.current) {
-        try {
-          tokenClientRef.current = google.accounts.oauth2.initTokenClient({
-            client_id: GOOGLE_CLIENT_ID,
-            scope: 'https://www.googleapis.com/auth/drive.appdata email profile openid',
-            callback: handleTokenCallback,
-            error_callback: (err: any) => {
-              console.warn('Google OAuth popup error:', err);
-              if (err?.type === 'popup_failed_to_open' || err?.type === 'popup_closed') {
-                alert(
-                  'Popup login diblokir oleh browser Anda.\n\nSilakan klik ikon gembok/setelan di sebelah kiri URL situs (di bilah alamat), pilih "Setelan Situs", lalu ubah "Pop-up dan pengalihan" menjadi "Izinkan".'
-                );
-              }
-            },
-          });
-        } catch (e) {
-          console.error('Failed to setup Google Token Client:', e);
-        }
-      }
-    };
-
-    if ((window as any).google) {
-      setupClient();
-    } else {
-      const timer = setInterval(() => {
-        if ((window as any).google) {
-          setupClient();
-          clearInterval(timer);
-        }
-      }, 300);
-      return () => clearInterval(timer);
-    }
-  }, [handleTokenCallback]);
-
-  // Login with Google Identity Services (OAuth Token Client)
+  // Login with Google OAuth (Full-Page Redirect Flow)
+  // Completely immune to popup blockers across all browsers (Chrome, Safari, Brave, mobile)
   const loginWithGoogle = useCallback(() => {
     if (!GOOGLE_CLIENT_ID) {
       alert('NEXT_PUBLIC_GOOGLE_CLIENT_ID belum diatur di .env. Mengaktifkan Mode Demo Login untuk uji coba.');
@@ -192,22 +169,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return;
     }
 
-    if (tokenClientRef.current) {
-      // 100% synchronous call directly on user click
-      tokenClientRef.current.requestAccessToken();
-    } else if (typeof window !== 'undefined' && (window as any).google?.accounts?.oauth2) {
-      const google = (window as any).google;
-      const client = google.accounts.oauth2.initTokenClient({
-        client_id: GOOGLE_CLIENT_ID,
-        scope: 'https://www.googleapis.com/auth/drive.appdata email profile openid',
-        callback: handleTokenCallback,
-      });
-      tokenClientRef.current = client;
-      client.requestAccessToken();
-    } else {
-      alert('Layanan Google sedang disiapkan di browser. Silakan klik "Masuk Google" sekali lagi.');
-    }
-  }, [loginDemo, handleTokenCallback]);
+    if (typeof window === 'undefined') return;
+
+    const origin = window.location.origin;
+    const scopes = [
+      'https://www.googleapis.com/auth/drive.appdata',
+      'https://www.googleapis.com/auth/userinfo.email',
+      'https://www.googleapis.com/auth/userinfo.profile',
+      'openid',
+    ].join(' ');
+
+    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${encodeURIComponent(
+      GOOGLE_CLIENT_ID
+    )}&redirect_uri=${encodeURIComponent(origin)}&response_type=token&scope=${encodeURIComponent(
+      scopes
+    )}&prompt=select_account`;
+
+    // Direct navigation: no popup blocker can block this!
+    window.location.href = authUrl;
+  }, [loginDemo]);
 
   const logout = useCallback(() => {
     setUser(null);
