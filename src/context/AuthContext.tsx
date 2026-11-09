@@ -103,10 +103,48 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [scenarios]);
 
+  // Handle token response from Google
+  const handleTokenCallback = useCallback(
+    async (tokenResponse: any) => {
+      if (tokenResponse && tokenResponse.access_token) {
+        const token = tokenResponse.access_token;
+        setAccessToken(token);
+
+        try {
+          const userRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (userRes.ok) {
+            const info = await userRes.json();
+            const profile: UserProfile = {
+              id: info.sub,
+              name: info.name,
+              email: info.email,
+              avatarUrl: info.picture,
+              isDemoUser: false,
+            };
+            setUser(profile);
+            setSyncStatus('syncing');
+
+            // Sync with Google Drive
+            const syncResult = await syncWithGoogleDrive(token, scenarios);
+            if (syncResult.success) {
+              setScenarios(syncResult.syncedScenarios);
+              setSyncStatus('synced');
+              setLastSyncedAt(new Date());
+            }
+          }
+        } catch (err) {
+          console.error('Error fetching userinfo from Google:', err);
+        }
+      }
+    },
+    [scenarios]
+  );
+
   // Login with Google Identity Services (OAuth Token Client)
   const loginWithGoogle = useCallback(async () => {
     if (!GOOGLE_CLIENT_ID) {
-      // If client ID is not configured yet, auto-route to Demo login with friendly notification
       alert('NEXT_PUBLIC_GOOGLE_CLIENT_ID belum diatur di .env. Mengaktifkan Mode Demo Login untuk uji coba.');
       loginDemo();
       return;
@@ -114,62 +152,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     if (typeof window === 'undefined') return;
 
-    // Load Google Identity Services script if not already loaded
-    if (!(window as any).google) {
-      await new Promise<void>((resolve, reject) => {
-        const script = document.createElement('script');
-        script.src = 'https://accounts.google.com/gsi/client';
-        script.async = true;
-        script.defer = true;
-        script.onload = () => resolve();
-        script.onerror = () => reject(new Error('GSI Script load failed'));
-        document.body.appendChild(script);
-      });
-    }
-
     const google = (window as any).google;
-    const client = google.accounts.oauth2.initTokenClient({
-      client_id: GOOGLE_CLIENT_ID,
-      scope: 'https://www.googleapis.com/auth/drive.appdata email profile openid',
-      callback: async (tokenResponse: any) => {
-        if (tokenResponse && tokenResponse.access_token) {
-          const token = tokenResponse.access_token;
-          setAccessToken(token);
-
-          // Fetch user info using token
-          try {
-            const userRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-              headers: { Authorization: `Bearer ${token}` },
-            });
-            if (userRes.ok) {
-              const info = await userRes.json();
-              const profile: UserProfile = {
-                id: info.sub,
-                name: info.name,
-                email: info.email,
-                avatarUrl: info.picture,
-                isDemoUser: false,
-              };
-              setUser(profile);
-              setSyncStatus('syncing');
-
-              // Initial sync with GDrive
-              const syncResult = await syncWithGoogleDrive(token, scenarios);
-              if (syncResult.success) {
-                setScenarios(syncResult.syncedScenarios);
-                setSyncStatus('synced');
-                setLastSyncedAt(new Date());
-              }
+    if (google?.accounts?.oauth2) {
+      try {
+        const client = google.accounts.oauth2.initTokenClient({
+          client_id: GOOGLE_CLIENT_ID,
+          scope: 'https://www.googleapis.com/auth/drive.appdata email profile openid',
+          callback: handleTokenCallback,
+          error_callback: (err: any) => {
+            console.warn('Google OAuth popup error:', err);
+            if (err?.type === 'popup_failed_to_open' || err?.type === 'popup_closed') {
+              alert(
+                'Popup login diblokir oleh browser Anda.\n\nSilakan klik ikon popup (tanda silang merah / gembok) di bilah alamat browser Anda (kanan atas) dan pilih "Selalu izinkan popup dari situs ini".'
+              );
             }
-          } catch (err) {
-            console.error('Error fetching userinfo:', err);
-          }
-        }
-      },
-    });
+          },
+        });
 
-    client.requestAccessToken();
-  }, [loginDemo, scenarios]);
+        // Trigger popup synchronously in response to user click
+        client.requestAccessToken({ prompt: 'consent' });
+      } catch (err) {
+        console.error('Failed to initialize Google Token Client:', err);
+      }
+    } else {
+      // If GSI script is still finishing download, load it and alert
+      const script = document.createElement('script');
+      script.src = 'https://accounts.google.com/gsi/client';
+      script.async = true;
+      script.onload = () => {
+        alert('Google Services selesai dimuat. Silakan klik "Sign in with Google" sekali lagi.');
+      };
+      document.body.appendChild(script);
+    }
+  }, [loginDemo, handleTokenCallback]);
 
   const logout = useCallback(() => {
     setUser(null);

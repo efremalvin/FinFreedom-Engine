@@ -18,7 +18,7 @@ export interface AuthContextType {
   lastSyncedAt: Date | null;
   scenarios: SavedScenario[];
   activeScenarioId: string | null;
-  loginWithGoogle: () => Promise<void>;
+  loginWithGoogle: () => Promise<void> | void;
   loginDemo: () => void;
   logout: () => void;
   saveCurrentScenario: (name: string, description?: string) => Promise<SavedScenario>;
