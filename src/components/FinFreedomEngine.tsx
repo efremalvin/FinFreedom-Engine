@@ -22,6 +22,8 @@ import {
   Eye,
   EyeOff,
   Filter,
+  LayoutGrid,
+  Table,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -83,6 +85,9 @@ export const FinFreedomEngine: React.FC = () => {
   const [isDarkMode, setIsDarkMode] = useState<boolean>(true);
   const [showTableModal, setShowTableModal] = useState<boolean>(false);
   const [mobileView, setMobileView] = useState<'params' | 'results' | 'all'>('all');
+  const [mobileTableView, setMobileTableView] = useState<'card' | 'table'>('card');
+  const [useCompactNumbers, setUseCompactNumbers] = useState<boolean>(true);
+  const [tableDisplayLimit, setTableDisplayLimit] = useState<number>(15);
 
   // Modul A State
   const [accumParams, setAccumParams] =
@@ -129,6 +134,18 @@ export const FinFreedomEngine: React.FC = () => {
   const decumulationResult = useMemo(() => {
     return calculateDecumulation(decumParams);
   }, [decumParams]);
+
+  const totalTablePoints = activeTab === 'accumulation'
+    ? accumulationResult.dataPoints.length
+    : decumulationResult.dataPoints.length;
+
+  const displayedAccumulationPoints = useMemo(() => {
+    return accumulationResult.dataPoints.slice(0, tableDisplayLimit);
+  }, [accumulationResult.dataPoints, tableDisplayLimit]);
+
+  const displayedDecumulationPoints = useMemo(() => {
+    return decumulationResult.dataPoints.slice(0, tableDisplayLimit);
+  }, [decumulationResult.dataPoints, tableDisplayLimit]);
 
   // Keep Modul B first year expense synced if automatic is checked
   const handleDecumInitialBalanceChange = (newBalance: number) => {
@@ -1994,193 +2011,498 @@ export const FinFreedomEngine: React.FC = () => {
         </button>
 
         {showTableModal && (
-          <div className="mt-4 pt-4 border-t border-zinc-800 space-y-2">
-            <div className="flex sm:hidden items-center gap-1.5 text-[11px] text-zinc-400">
-              <Info className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-              <span>Geser tabel ke samping untuk melihat seluruh kolom data ➔</span>
+          <div className="mt-4 pt-4 border-t border-zinc-800 space-y-4">
+            {/* Toolbar: View Switcher (Mobile), Counter, & Number Format Toggle */}
+            <div className="flex flex-wrap items-center justify-between gap-2.5 pb-2 border-b border-zinc-800/70">
+              {/* Mobile View Mode Switcher (Kartu vs Tabel) */}
+              <div className="flex sm:hidden items-center bg-zinc-950 p-1 rounded-lg border border-zinc-800">
+                <button
+                  type="button"
+                  onClick={() => setMobileTableView('card')}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium transition-all ${
+                    mobileTableView === 'card'
+                      ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-xs'
+                      : 'text-zinc-400 hover:text-zinc-200'
+                  }`}
+                >
+                  <LayoutGrid className="w-3.5 h-3.5" />
+                  <span>Kartu</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMobileTableView('table')}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium transition-all ${
+                    mobileTableView === 'table'
+                      ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-xs'
+                      : 'text-zinc-400 hover:text-zinc-200'
+                  }`}
+                >
+                  <Table className="w-3.5 h-3.5" />
+                  <span>Tabel</span>
+                </button>
+              </div>
+
+              {/* Data Counter Info */}
+              <div className="text-[11px] text-zinc-400 flex items-center gap-1.5">
+                <span>
+                  Menampilkan <strong className="text-zinc-200">{Math.min(tableDisplayLimit, totalTablePoints)}</strong> dari{' '}
+                  <strong className="text-zinc-200">{totalTablePoints}</strong> tahun data
+                </span>
+              </div>
+
+              {/* Number Format Toggle (Compact vs Full) */}
+              <div className="flex items-center gap-1.5 bg-zinc-950 p-1 rounded-lg border border-zinc-800">
+                <span className="text-[10px] text-zinc-500 pl-1.5">Format:</span>
+                <button
+                  type="button"
+                  onClick={() => setUseCompactNumbers(true)}
+                  className={`px-2 py-0.5 rounded text-[11px] transition-colors ${
+                    useCompactNumbers
+                      ? 'bg-zinc-800 text-zinc-100 font-semibold'
+                      : 'text-zinc-400 hover:text-zinc-200'
+                  }`}
+                  title="Format ringkas (contoh: Rp 1,5 M)"
+                >
+                  Ringkas (Rp M)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setUseCompactNumbers(false)}
+                  className={`px-2 py-0.5 rounded text-[11px] transition-colors ${
+                    !useCompactNumbers
+                      ? 'bg-zinc-800 text-zinc-100 font-semibold'
+                      : 'text-zinc-400 hover:text-zinc-200'
+                  }`}
+                  title="Format angka penuh (contoh: Rp 1.500.000.000)"
+                >
+                  Penuh (Rp 000)
+                </button>
+              </div>
             </div>
 
-            <div className="overflow-x-auto">
+            {/* Mobile Card View (shown on mobile screens when mobileTableView === 'card') */}
+            <div className={mobileTableView === 'card' ? 'block sm:hidden space-y-3' : 'hidden'}>
               {activeTab === 'accumulation' ? (
-                <table className="w-full text-left text-xs text-zinc-300 min-w-[780px]">
-                  <thead className="text-[10px] uppercase bg-zinc-950/80 text-zinc-400 border-b border-zinc-800">
-                    <tr>
-                      <th className="py-2.5 px-3 sticky left-0 bg-zinc-950 z-10 border-r border-zinc-800">Tahun</th>
-                      <th className="py-2.5 px-3">
-                        <div className="flex items-center gap-1">
-                          <span className="w-2 h-2 rounded-full bg-slate-400" />
-                          <span>Pokok (Nominal)</span>
-                        </div>
-                        <div className="text-[9px] font-normal normal-case text-zinc-500">
-                          {chartFilters.nominalPrincipal ? '● Grafik On' : '○ Preview Aktif'}
-                        </div>
-                      </th>
-                      <th className="py-2.5 px-3">
-                        <div className="flex items-center gap-1">
-                          <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                          <span>Portofolio (Nominal)</span>
-                        </div>
-                        <div className="text-[9px] font-normal normal-case text-zinc-500">
-                          {chartFilters.nominalPortfolio ? '● Grafik On' : '○ Preview Aktif'}
-                        </div>
-                      </th>
-                      <th className="py-2.5 px-3">
-                        <div className="flex items-center gap-1">
-                          <span className="w-2 h-2 rounded-full bg-purple-400" />
-                          <span>Pokok Riil (-Inf)</span>
-                        </div>
-                        <div className="text-[9px] font-normal normal-case text-zinc-500">
-                          {chartFilters.realPrincipal ? '● Grafik On' : '○ Preview Aktif'}
-                        </div>
-                      </th>
-                      <th className="py-2.5 px-3">
-                        <div className="flex items-center gap-1">
-                          <span className="w-2 h-2 rounded-full bg-sky-400" />
-                          <span>Portofolio Riil (-Inf)</span>
-                        </div>
-                        <div className="text-[9px] font-normal normal-case text-zinc-500">
-                          {chartFilters.realPortfolio ? '● Grafik On' : '○ Preview Aktif'}
-                        </div>
-                      </th>
-                      <th className="py-2.5 px-3">Bunga Bergulung (Gain)</th>
-                      <th className="py-2.5 px-3 bg-zinc-950/90 border-l border-zinc-800">
-                        <div>Ketetapan Target FIRE</div>
-                        <div className="text-[9px] font-normal normal-case text-zinc-500">
-                          Target: {formatCompactIDR(accumulationResult.targetFIRE)}
-                        </div>
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-zinc-800/60 font-mono text-[11px]">
-                    {accumulationResult.dataPoints.map((row) => (
-                      <tr
-                        key={row.year}
-                        className={`hover:bg-zinc-800/40 transition-colors ${
-                          row.isReached ? 'bg-emerald-500/5' : ''
-                        }`}
-                      >
-                        <td className="py-2 px-3 font-sans font-semibold text-zinc-200 sticky left-0 bg-zinc-950/95 z-10 border-r border-zinc-800/80">
-                          {row.label}
-                        </td>
-                      <td className="py-2 px-3 text-slate-300">
-                        {formatIDR(row.totalPrincipal)}
-                      </td>
-                      <td className="py-2 px-3 font-bold text-emerald-400">
-                        {formatIDR(row.totalPortfolio)}
-                      </td>
-                      <td className="py-2 px-3 text-purple-300">
-                        {formatIDR(row.realPrincipal)}
-                      </td>
-                      <td className="py-2 px-3 font-semibold text-sky-400">
-                        {formatIDR(row.realPortfolio)}
-                      </td>
-                      <td className="py-2 px-3 text-teal-400 font-medium">
-                        +{formatIDR(row.compoundGain)}
-                      </td>
-                      <td className="py-2 px-3 font-sans border-l border-zinc-800/60">
+                displayedAccumulationPoints.map((row) => (
+                  <div
+                    key={row.year}
+                    className={`p-3.5 rounded-xl border transition-all ${
+                      row.isReached
+                        ? 'bg-emerald-950/20 border-emerald-500/40 ring-1 ring-emerald-500/20 shadow-sm'
+                        : 'bg-zinc-950/70 border-zinc-800/80 hover:border-zinc-700'
+                    }`}
+                  >
+                    {/* Card Header: Year + Status FIRE */}
+                    <div className="flex items-center justify-between gap-2 mb-2 pb-2 border-b border-zinc-800/60">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs font-bold text-zinc-100">{row.label}</span>
+                        {row.isReached && (
+                          <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                            🎯 FIRE
+                          </span>
+                        )}
+                      </div>
+                      <div>
                         {row.fireStatus === 'surplus' ? (
-                          <div className="flex flex-col">
-                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 inline-block w-fit">
+                          <div className="text-right">
+                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 inline-block">
                               ✓ Surplus +{formatCompactIDR(row.fireDelta)}
                             </span>
-                            <span className="text-[9px] text-emerald-400/80 mt-0.5">
+                            <div className="text-[9px] text-emerald-400/80 mt-0.5">
                               +{row.fireDeltaPercent}% di atas target
-                            </span>
+                            </div>
                           </div>
                         ) : row.fireStatus === 'exact' ? (
-                          <div className="flex flex-col">
-                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-sky-500/10 text-sky-400 border border-sky-500/20 inline-block w-fit">
-                              ✓ Pas 100% (Rp 0)
-                            </span>
-                            <span className="text-[9px] text-sky-400/80 mt-0.5">
-                              Tepat sesuai target
-                            </span>
-                          </div>
+                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-sky-500/10 text-sky-400 border border-sky-500/20 inline-block">
+                            ✓ Tepat Pas 100%
+                          </span>
                         ) : (
-                          <div className="flex flex-col">
-                            <span className="text-[10px] text-zinc-400 px-2 py-0.5 rounded-full bg-zinc-800/80 border border-zinc-700/60 inline-block w-fit">
+                          <div className="text-right">
+                            <span className="text-[10px] text-zinc-400 px-2 py-0.5 rounded-full bg-zinc-800/80 border border-zinc-700/60 inline-block">
                               - Defisit {formatCompactIDR(Math.abs(row.fireDelta))}
                             </span>
-                            <span className="text-[9px] text-zinc-500 mt-0.5">
+                            <div className="text-[9px] text-zinc-500 mt-0.5">
                               {row.fireDeltaPercent}% dari target
-                            </span>
+                            </div>
                           </div>
                         )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : (
-              <table className="w-full text-left text-xs text-zinc-300 min-w-[680px]">
-                <thead className="text-[10px] uppercase bg-zinc-950/80 text-zinc-400 border-b border-zinc-800">
-                  <tr>
-                    <th className="py-2.5 px-3 sticky left-0 bg-zinc-950 z-10 border-r border-zinc-800">Tahun Pensiun</th>
-                    <th className="py-2.5 px-3">Penarikan 4.0%</th>
-                    <th className="py-2.5 px-3">Sisa Saldo SWR 4.0%</th>
-                    <th className="py-2.5 px-3">Penarikan 3.25%</th>
-                    <th className="py-2.5 px-3">Sisa Saldo SWR 3.25%</th>
-                    <th className="py-2.5 px-3">Status Komparasi</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-800/60 font-mono text-[11px]">
-                  {decumulationResult.dataPoints.map((row) => (
-                    <tr
-                      key={row.year}
-                      className={`hover:bg-zinc-800/40 transition-colors ${
-                        row.isStandardDepleted && !row.isConservativeDepleted
-                          ? 'bg-rose-500/5'
-                          : ''
-                      }`}
-                    >
-                      <td className="py-2 px-3 font-sans font-semibold text-zinc-200 sticky left-0 bg-zinc-950/95 z-10 border-r border-zinc-800/80">
-                        {row.label}
-                      </td>
-                      <td className="py-2 px-3 text-zinc-400">
-                        {formatIDR(row.withdrawalStandard)}
-                      </td>
-                      <td
-                        className={`py-2 px-3 font-bold ${
-                          row.isStandardDepleted
-                            ? 'text-rose-400'
-                            : 'text-zinc-100'
-                        }`}
-                      >
-                        {formatIDR(row.balanceStandard)}
-                      </td>
-                      <td className="py-2 px-3 text-emerald-400/80">
-                        {formatIDR(row.withdrawalConservative)}
-                      </td>
-                      <td
-                        className={`py-2 px-3 font-bold ${
-                          row.isConservativeDepleted
-                            ? 'text-rose-400'
-                            : 'text-emerald-400'
-                        }`}
-                      >
-                        {formatIDR(row.balanceConservative)}
-                      </td>
-                      <td className="py-2 px-3 font-sans">
+                      </div>
+                    </div>
+
+                    {/* Hero Metric: Total Portofolio (Nominal) */}
+                    <div className="bg-zinc-900/70 rounded-lg p-2.5 mb-2.5 border border-zinc-800/60 flex items-center justify-between">
+                      <div>
+                        <div className="text-[10px] uppercase tracking-wider text-zinc-400 font-medium">
+                          Total Portofolio (Nominal)
+                        </div>
+                        <div className="text-base font-bold font-mono text-emerald-400 mt-0.5">
+                          {useCompactNumbers ? formatCompactIDR(row.totalPortfolio) : formatIDR(row.totalPortfolio)}
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-[9px] text-zinc-400">Bunga Bergulung</div>
+                        <div className="text-xs font-semibold font-mono text-teal-400 mt-0.5">
+                          +{formatCompactIDR(row.compoundGain)}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 2x2 Grid Detail */}
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div className="bg-zinc-900/40 rounded-lg p-2 border border-zinc-800/40">
+                        <div className="text-[10px] text-zinc-400 flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+                          <span>Pokok Disetor</span>
+                        </div>
+                        <div className="font-mono text-[11px] font-semibold text-zinc-200 mt-1">
+                          {useCompactNumbers ? formatCompactIDR(row.totalPrincipal) : formatIDR(row.totalPrincipal)}
+                        </div>
+                      </div>
+
+                      <div className="bg-zinc-900/40 rounded-lg p-2 border border-zinc-800/40">
+                        <div className="text-[10px] text-zinc-400 flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-teal-400" />
+                          <span>Total Gain</span>
+                        </div>
+                        <div className="font-mono text-[11px] font-semibold text-teal-300 mt-1">
+                          +{useCompactNumbers ? formatCompactIDR(row.compoundGain) : formatIDR(row.compoundGain)}
+                        </div>
+                      </div>
+
+                      <div className="bg-zinc-900/40 rounded-lg p-2 border border-zinc-800/40">
+                        <div className="text-[10px] text-zinc-400 flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-sky-400" />
+                          <span>Portofolio Riil</span>
+                        </div>
+                        <div className="font-mono text-[11px] font-semibold text-sky-300 mt-1">
+                          {useCompactNumbers ? formatCompactIDR(row.realPortfolio) : formatIDR(row.realPortfolio)}
+                        </div>
+                      </div>
+
+                      <div className="bg-zinc-900/40 rounded-lg p-2 border border-zinc-800/40">
+                        <div className="text-[10px] text-zinc-400 flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-purple-400" />
+                          <span>Pokok Riil</span>
+                        </div>
+                        <div className="font-mono text-[11px] font-semibold text-purple-300 mt-1">
+                          {useCompactNumbers ? formatCompactIDR(row.realPrincipal) : formatIDR(row.realPrincipal)}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                displayedDecumulationPoints.map((row) => (
+                  <div
+                    key={row.year}
+                    className={`p-3.5 rounded-xl border transition-all ${
+                      row.isStandardDepleted && !row.isConservativeDepleted
+                        ? 'bg-rose-950/20 border-rose-500/30'
+                        : row.isStandardDepleted && row.isConservativeDepleted
+                        ? 'bg-rose-950/30 border-rose-500/40'
+                        : 'bg-zinc-950/70 border-zinc-800/80 hover:border-zinc-700'
+                    }`}
+                  >
+                    {/* Header */}
+                    <div className="flex items-center justify-between gap-2 mb-2 pb-2 border-b border-zinc-800/60">
+                      <span className="text-xs font-bold text-zinc-100">{row.label}</span>
+                      <div>
                         {row.isStandardDepleted && !row.isConservativeDepleted ? (
                           <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/20">
                             4% Habis • 3.25% Bertahan
                           </span>
                         ) : row.isStandardDepleted && row.isConservativeDepleted ? (
-                          <span className="text-[10px] text-rose-500 font-semibold">
+                          <span className="text-[10px] text-rose-500 font-semibold px-2 py-0.5 rounded-full bg-rose-500/10 border border-rose-500/20">
                             Keduanya Habis
                           </span>
                         ) : (
-                          <span className="text-[10px] text-emerald-400">
-                            Keduanya Aman
+                          <span className="text-[10px] text-emerald-400 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 font-medium">
+                            ✓ Keduanya Aman
                           </span>
                         )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
+                      </div>
+                    </div>
+
+                    {/* SWR Comparison 2-Column Cards */}
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      {/* SWR 4.0% */}
+                      <div className={`p-2.5 rounded-lg border ${
+                        row.isStandardDepleted ? 'bg-rose-950/25 border-rose-800/50' : 'bg-zinc-900/60 border-zinc-800/60'
+                      }`}>
+                        <div className="text-[10px] font-semibold text-zinc-300 pb-1 border-b border-zinc-800/40 flex items-center justify-between">
+                          <span>SWR 4.0%</span>
+                          {row.isStandardDepleted && <span className="text-[9px] text-rose-400 font-bold">HABIS</span>}
+                        </div>
+                        <div className="mt-1.5">
+                          <div className="text-[9px] text-zinc-400">Penarikan</div>
+                          <div className="font-mono text-[11px] text-zinc-300">
+                            {useCompactNumbers ? formatCompactIDR(row.withdrawalStandard) : formatIDR(row.withdrawalStandard)}
+                          </div>
+                        </div>
+                        <div className="mt-1.5">
+                          <div className="text-[9px] text-zinc-400">Sisa Saldo</div>
+                          <div className={`font-mono text-xs font-bold ${
+                            row.isStandardDepleted ? 'text-rose-400' : 'text-zinc-100'
+                          }`}>
+                            {useCompactNumbers ? formatCompactIDR(row.balanceStandard) : formatIDR(row.balanceStandard)}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* SWR 3.25% */}
+                      <div className={`p-2.5 rounded-lg border ${
+                        row.isConservativeDepleted ? 'bg-rose-950/25 border-rose-800/50' : 'bg-emerald-950/15 border-emerald-900/40'
+                      }`}>
+                        <div className="text-[10px] font-semibold text-emerald-400 pb-1 border-b border-zinc-800/40 flex items-center justify-between">
+                          <span>SWR 3.25%</span>
+                          {row.isConservativeDepleted && <span className="text-[9px] text-rose-400 font-bold">HABIS</span>}
+                        </div>
+                        <div className="mt-1.5">
+                          <div className="text-[9px] text-zinc-400">Penarikan</div>
+                          <div className="font-mono text-[11px] text-emerald-300/90">
+                            {useCompactNumbers ? formatCompactIDR(row.withdrawalConservative) : formatIDR(row.withdrawalConservative)}
+                          </div>
+                        </div>
+                        <div className="mt-1.5">
+                          <div className="text-[9px] text-zinc-400">Sisa Saldo</div>
+                          <div className={`font-mono text-xs font-bold ${
+                            row.isConservativeDepleted ? 'text-rose-400' : 'text-emerald-400'
+                          }`}>
+                            {useCompactNumbers ? formatCompactIDR(row.balanceConservative) : formatIDR(row.balanceConservative)}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
+
+            {/* Table View (shown on desktop or when mobileTableView === 'table' on mobile) */}
+            <div className={mobileTableView === 'table' ? 'block' : 'hidden sm:block'}>
+              {mobileTableView === 'table' && (
+                <div className="flex sm:hidden items-center gap-1.5 text-[11px] text-zinc-400 mb-2">
+                  <Info className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                  <span>Geser tabel ke samping untuk melihat seluruh kolom data ➔</span>
+                </div>
+              )}
+
+              <div className="overflow-x-auto rounded-xl border border-zinc-800/80">
+                {activeTab === 'accumulation' ? (
+                  <table className={`w-full text-left text-xs text-zinc-300 ${useCompactNumbers ? 'min-w-[620px]' : 'min-w-[780px]'}`}>
+                    <thead className="text-[10px] uppercase bg-zinc-950 text-zinc-400 border-b border-zinc-800 sticky top-0 z-20">
+                      <tr>
+                        <th className="py-2.5 px-3 sticky left-0 bg-zinc-950 z-30 border-r border-zinc-800 shadow-[4px_0_8px_-2px_rgba(0,0,0,0.7)]">
+                          Tahun
+                        </th>
+                        <th className="py-2.5 px-3">
+                          <div className="flex items-center gap-1">
+                            <span className="w-2 h-2 rounded-full bg-slate-400" />
+                            <span>Pokok (Nominal)</span>
+                          </div>
+                          <div className="text-[9px] font-normal normal-case text-zinc-500">
+                            {chartFilters.nominalPrincipal ? '● Grafik On' : '○ Preview Aktif'}
+                          </div>
+                        </th>
+                        <th className="py-2.5 px-3">
+                          <div className="flex items-center gap-1">
+                            <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                            <span>Portofolio (Nominal)</span>
+                          </div>
+                          <div className="text-[9px] font-normal normal-case text-zinc-500">
+                            {chartFilters.nominalPortfolio ? '● Grafik On' : '○ Preview Aktif'}
+                          </div>
+                        </th>
+                        <th className="py-2.5 px-3">
+                          <div className="flex items-center gap-1">
+                            <span className="w-2 h-2 rounded-full bg-purple-400" />
+                            <span>Pokok Riil (-Inf)</span>
+                          </div>
+                          <div className="text-[9px] font-normal normal-case text-zinc-500">
+                            {chartFilters.realPrincipal ? '● Grafik On' : '○ Preview Aktif'}
+                          </div>
+                        </th>
+                        <th className="py-2.5 px-3">
+                          <div className="flex items-center gap-1">
+                            <span className="w-2 h-2 rounded-full bg-sky-400" />
+                            <span>Portofolio Riil (-Inf)</span>
+                          </div>
+                          <div className="text-[9px] font-normal normal-case text-zinc-500">
+                            {chartFilters.realPortfolio ? '● Grafik On' : '○ Preview Aktif'}
+                          </div>
+                        </th>
+                        <th className="py-2.5 px-3">Bunga Bergulung (Gain)</th>
+                        <th className="py-2.5 px-3 bg-zinc-950 border-l border-zinc-800">
+                          <div>Ketetapan Target FIRE</div>
+                          <div className="text-[9px] font-normal normal-case text-zinc-500">
+                            Target: {formatCompactIDR(accumulationResult.targetFIRE)}
+                          </div>
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-800/60 font-mono text-[11px]">
+                      {displayedAccumulationPoints.map((row) => (
+                        <tr
+                          key={row.year}
+                          className={`hover:bg-zinc-800/40 transition-colors odd:bg-zinc-900/20 ${
+                            row.isReached ? 'bg-emerald-500/5' : ''
+                          }`}
+                        >
+                          <td className="py-2 px-3 font-sans font-semibold text-zinc-200 sticky left-0 bg-zinc-950 z-10 border-r border-zinc-800/80 shadow-[4px_0_8px_-2px_rgba(0,0,0,0.7)]">
+                            {row.label}
+                          </td>
+                          <td className="py-2 px-3 text-slate-300">
+                            {useCompactNumbers ? formatCompactIDR(row.totalPrincipal) : formatIDR(row.totalPrincipal)}
+                          </td>
+                          <td className="py-2 px-3 font-bold text-emerald-400">
+                            {useCompactNumbers ? formatCompactIDR(row.totalPortfolio) : formatIDR(row.totalPortfolio)}
+                          </td>
+                          <td className="py-2 px-3 text-purple-300">
+                            {useCompactNumbers ? formatCompactIDR(row.realPrincipal) : formatIDR(row.realPrincipal)}
+                          </td>
+                          <td className="py-2 px-3 font-semibold text-sky-400">
+                            {useCompactNumbers ? formatCompactIDR(row.realPortfolio) : formatIDR(row.realPortfolio)}
+                          </td>
+                          <td className="py-2 px-3 text-teal-400 font-medium">
+                            +{useCompactNumbers ? formatCompactIDR(row.compoundGain) : formatIDR(row.compoundGain)}
+                          </td>
+                          <td className="py-2 px-3 font-sans border-l border-zinc-800/60">
+                            {row.fireStatus === 'surplus' ? (
+                              <div className="flex flex-col">
+                                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 inline-block w-fit">
+                                  ✓ Surplus +{formatCompactIDR(row.fireDelta)}
+                                </span>
+                                <span className="text-[9px] text-emerald-400/80 mt-0.5">
+                                  +{row.fireDeltaPercent}% di atas target
+                                </span>
+                              </div>
+                            ) : row.fireStatus === 'exact' ? (
+                              <div className="flex flex-col">
+                                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-sky-500/10 text-sky-400 border border-sky-500/20 inline-block w-fit">
+                                  ✓ Pas 100% (Rp 0)
+                                </span>
+                                <span className="text-[9px] text-sky-400/80 mt-0.5">
+                                  Tepat sesuai target
+                                </span>
+                              </div>
+                            ) : (
+                              <div className="flex flex-col">
+                                <span className="text-[10px] text-zinc-400 px-2 py-0.5 rounded-full bg-zinc-800/80 border border-zinc-700/60 inline-block w-fit">
+                                  - Defisit {formatCompactIDR(Math.abs(row.fireDelta))}
+                                </span>
+                                <span className="text-[9px] text-zinc-500 mt-0.5">
+                                  {row.fireDeltaPercent}% dari target
+                                </span>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                ) : (
+                  <table className={`w-full text-left text-xs text-zinc-300 ${useCompactNumbers ? 'min-w-[560px]' : 'min-w-[680px]'}`}>
+                    <thead className="text-[10px] uppercase bg-zinc-950 text-zinc-400 border-b border-zinc-800 sticky top-0 z-20">
+                      <tr>
+                        <th className="py-2.5 px-3 sticky left-0 bg-zinc-950 z-30 border-r border-zinc-800 shadow-[4px_0_8px_-2px_rgba(0,0,0,0.7)]">
+                          Tahun Pensiun
+                        </th>
+                        <th className="py-2.5 px-3">Penarikan 4.0%</th>
+                        <th className="py-2.5 px-3">Sisa Saldo SWR 4.0%</th>
+                        <th className="py-2.5 px-3">Penarikan 3.25%</th>
+                        <th className="py-2.5 px-3">Sisa Saldo SWR 3.25%</th>
+                        <th className="py-2.5 px-3">Status Komparasi</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-800/60 font-mono text-[11px]">
+                      {displayedDecumulationPoints.map((row) => (
+                        <tr
+                          key={row.year}
+                          className={`hover:bg-zinc-800/40 transition-colors odd:bg-zinc-900/20 ${
+                            row.isStandardDepleted && !row.isConservativeDepleted
+                              ? 'bg-rose-500/5'
+                              : ''
+                          }`}
+                        >
+                          <td className="py-2 px-3 font-sans font-semibold text-zinc-200 sticky left-0 bg-zinc-950 z-10 border-r border-zinc-800/80 shadow-[4px_0_8px_-2px_rgba(0,0,0,0.7)]">
+                            {row.label}
+                          </td>
+                          <td className="py-2 px-3 text-zinc-400">
+                            {useCompactNumbers ? formatCompactIDR(row.withdrawalStandard) : formatIDR(row.withdrawalStandard)}
+                          </td>
+                          <td
+                            className={`py-2 px-3 font-bold ${
+                              row.isStandardDepleted
+                                ? 'text-rose-400'
+                                : 'text-zinc-100'
+                            }`}
+                          >
+                            {useCompactNumbers ? formatCompactIDR(row.balanceStandard) : formatIDR(row.balanceStandard)}
+                          </td>
+                          <td className="py-2 px-3 text-emerald-400/80">
+                            {useCompactNumbers ? formatCompactIDR(row.withdrawalConservative) : formatIDR(row.withdrawalConservative)}
+                          </td>
+                          <td
+                            className={`py-2 px-3 font-bold ${
+                              row.isConservativeDepleted
+                                ? 'text-rose-400'
+                                : 'text-emerald-400'
+                            }`}
+                          >
+                            {useCompactNumbers ? formatCompactIDR(row.balanceConservative) : formatIDR(row.balanceConservative)}
+                          </td>
+                          <td className="py-2 px-3 font-sans">
+                            {row.isStandardDepleted && !row.isConservativeDepleted ? (
+                              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                                4% Habis • 3.25% Bertahan
+                              </span>
+                            ) : row.isStandardDepleted && row.isConservativeDepleted ? (
+                              <span className="text-[10px] text-rose-500 font-semibold">
+                                Keduanya Habis
+                              </span>
+                            ) : (
+                              <span className="text-[10px] text-emerald-400">
+                                Keduanya Aman
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+
+            {/* Pagination / Load More Controls */}
+            {totalTablePoints > tableDisplayLimit ? (
+              <div className="pt-2 flex flex-wrap items-center justify-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setTableDisplayLimit((prev) => Math.min(prev + 10, totalTablePoints))}
+                  className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium transition-colors"
+                >
+                  Tampilkan 10 Tahun Lagi (+10)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTableDisplayLimit(totalTablePoints)}
+                  className="px-3 py-1.5 rounded-lg bg-emerald-600/20 border border-emerald-500/30 hover:bg-emerald-600/30 text-emerald-300 text-xs font-medium transition-colors"
+                >
+                  Tampilkan Semua ({totalTablePoints} Tahun)
+                </button>
+              </div>
+            ) : totalTablePoints > 15 ? (
+              <div className="pt-2 flex items-center justify-center">
+                <button
+                  type="button"
+                  onClick={() => setTableDisplayLimit(15)}
+                  className="px-3 py-1.5 rounded-lg bg-zinc-800/80 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200 text-xs transition-colors"
+                >
+                  Ciutkan ke 15 Tahun Pertama
+                </button>
+              </div>
+            ) : null}
           </div>
         )}
       </div>
