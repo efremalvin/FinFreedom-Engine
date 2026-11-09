@@ -142,47 +142,70 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     [scenarios]
   );
 
+  const tokenClientRef = React.useRef<any>(null);
+
+  // Initialize Google Token Client once when Google Identity Services is ready
+  useEffect(() => {
+    if (typeof window === 'undefined' || !GOOGLE_CLIENT_ID) return;
+
+    const setupClient = () => {
+      const google = (window as any).google;
+      if (google?.accounts?.oauth2 && !tokenClientRef.current) {
+        try {
+          tokenClientRef.current = google.accounts.oauth2.initTokenClient({
+            client_id: GOOGLE_CLIENT_ID,
+            scope: 'https://www.googleapis.com/auth/drive.appdata email profile openid',
+            callback: handleTokenCallback,
+            error_callback: (err: any) => {
+              console.warn('Google OAuth popup error:', err);
+              if (err?.type === 'popup_failed_to_open' || err?.type === 'popup_closed') {
+                alert(
+                  'Popup login diblokir oleh browser Anda.\n\nSilakan klik ikon gembok/setelan di sebelah kiri URL situs (di bilah alamat), pilih "Setelan Situs", lalu ubah "Pop-up dan pengalihan" menjadi "Izinkan".'
+                );
+              }
+            },
+          });
+        } catch (e) {
+          console.error('Failed to setup Google Token Client:', e);
+        }
+      }
+    };
+
+    if ((window as any).google) {
+      setupClient();
+    } else {
+      const timer = setInterval(() => {
+        if ((window as any).google) {
+          setupClient();
+          clearInterval(timer);
+        }
+      }, 300);
+      return () => clearInterval(timer);
+    }
+  }, [handleTokenCallback]);
+
   // Login with Google Identity Services (OAuth Token Client)
-  const loginWithGoogle = useCallback(async () => {
+  const loginWithGoogle = useCallback(() => {
     if (!GOOGLE_CLIENT_ID) {
       alert('NEXT_PUBLIC_GOOGLE_CLIENT_ID belum diatur di .env. Mengaktifkan Mode Demo Login untuk uji coba.');
       loginDemo();
       return;
     }
 
-    if (typeof window === 'undefined') return;
-
-    const google = (window as any).google;
-    if (google?.accounts?.oauth2) {
-      try {
-        const client = google.accounts.oauth2.initTokenClient({
-          client_id: GOOGLE_CLIENT_ID,
-          scope: 'https://www.googleapis.com/auth/drive.appdata email profile openid',
-          callback: handleTokenCallback,
-          error_callback: (err: any) => {
-            console.warn('Google OAuth popup error:', err);
-            if (err?.type === 'popup_failed_to_open' || err?.type === 'popup_closed') {
-              alert(
-                'Popup login diblokir oleh browser Anda.\n\nSilakan klik ikon popup (tanda silang merah / gembok) di bilah alamat browser Anda (kanan atas) dan pilih "Selalu izinkan popup dari situs ini".'
-              );
-            }
-          },
-        });
-
-        // Trigger popup synchronously in response to user click
-        client.requestAccessToken({ prompt: 'consent' });
-      } catch (err) {
-        console.error('Failed to initialize Google Token Client:', err);
-      }
+    if (tokenClientRef.current) {
+      // 100% synchronous call directly on user click
+      tokenClientRef.current.requestAccessToken();
+    } else if (typeof window !== 'undefined' && (window as any).google?.accounts?.oauth2) {
+      const google = (window as any).google;
+      const client = google.accounts.oauth2.initTokenClient({
+        client_id: GOOGLE_CLIENT_ID,
+        scope: 'https://www.googleapis.com/auth/drive.appdata email profile openid',
+        callback: handleTokenCallback,
+      });
+      tokenClientRef.current = client;
+      client.requestAccessToken();
     } else {
-      // If GSI script is still finishing download, load it and alert
-      const script = document.createElement('script');
-      script.src = 'https://accounts.google.com/gsi/client';
-      script.async = true;
-      script.onload = () => {
-        alert('Google Services selesai dimuat. Silakan klik "Sign in with Google" sekali lagi.');
-      };
-      document.body.appendChild(script);
+      alert('Layanan Google sedang disiapkan di browser. Silakan klik "Masuk Google" sekali lagi.');
     }
   }, [loginDemo, handleTokenCallback]);
 
