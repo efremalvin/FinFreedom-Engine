@@ -11,7 +11,9 @@ import {
 } from '@/services/gdriveStorage';
 
 const USER_SESSION_KEY = 'finfreedom_user_session';
-const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '';
+const GOOGLE_CLIENT_ID =
+  process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ||
+  '377514636299-db8b7pju2ibccuj71cj9bd34dskc8cb2.apps.googleusercontent.com';
 
 interface ExtendedAuthContextType extends AuthContextType {
   saveScenarioWithData: (
