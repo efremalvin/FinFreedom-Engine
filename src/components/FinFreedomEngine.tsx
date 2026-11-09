@@ -24,6 +24,8 @@ import {
   Filter,
   LayoutGrid,
   Table,
+  SlidersHorizontal,
+  Check,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -56,7 +58,10 @@ import {
   AccumulationParams,
   AccumulationDataPoint,
   DecumulationParams,
+  SavedScenario,
 } from '@/types/simulator';
+import { UserAuthMenu } from './ui/UserAuthMenu';
+import { useAuth } from '@/context/AuthContext';
 
 // Initial Defaults for Modul A
 const defaultAccumulationParams: AccumulationParams = {
@@ -67,6 +72,8 @@ const defaultAccumulationParams: AccumulationParams = {
   annualInflation: 4.0,
   timeHorizonYears: 20,
   swrMultiplier: 25,
+  dividendYield: 3.5,
+  reinvestDividends: true,
 };
 
 // Initial Defaults for Modul B
@@ -77,6 +84,7 @@ const defaultDecumulationParams: DecumulationParams = {
   annualInflationRate: 4.5,
   retirementYears: 30,
   useAutomaticFirstYearExpense: true,
+  dividendYield: 3.5,
 };
 
 export const FinFreedomEngine: React.FC = () => {
@@ -88,6 +96,31 @@ export const FinFreedomEngine: React.FC = () => {
   const [mobileTableView, setMobileTableView] = useState<'card' | 'table'>('card');
   const [useCompactNumbers, setUseCompactNumbers] = useState<boolean>(true);
   const [tableDisplayLimit, setTableDisplayLimit] = useState<number>(15);
+  const [isMinimalMode, setIsMinimalMode] = useState<boolean>(false);
+  const [showConfirmToast, setShowConfirmToast] = useState<boolean>(false);
+  const { isAuthenticated, saveScenarioWithData } = useAuth() as any;
+
+  const handleConfirmAndSave = async () => {
+    try {
+      if (saveScenarioWithData) {
+        await saveScenarioWithData(
+          `Pilihan ${activeTab === 'accumulation' ? 'Akumulasi' : 'Dekumulasi'}`,
+          `Dikonfirmasi pada ${new Date().toLocaleDateString('id-ID')} ${new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}`,
+          activeTab,
+          accumParams,
+          decumParams
+        );
+      }
+    } catch {
+      // fallback
+    }
+
+    setIsMinimalMode(true);
+    setShowConfirmToast(true);
+    setTimeout(() => {
+      setShowConfirmToast(false);
+    }, 4000);
+  };
 
   // Modul A State
   const [accumParams, setAccumParams] =
@@ -105,14 +138,42 @@ export const FinFreedomEngine: React.FC = () => {
   const [decumParams, setDecumParams] =
     useState<DecumulationParams>(defaultDecumulationParams);
 
-  // Client hydration check
+  // Live Indonesia Inflation State (from /api/inflation)
+  const [liveInflation, setLiveInflation] = useState<{ rate: number; source: string } | null>(null);
+  const [isLoadingInflation, setIsLoadingInflation] = useState<boolean>(false);
+
+  // Client hydration check & Fetch live Indonesia inflation
   useEffect(() => {
     setMounted(true);
     // Sync html dark class
     if (document.documentElement.classList.contains('dark')) {
       setIsDarkMode(true);
     }
+
+    setIsLoadingInflation(true);
+    fetch('/api/inflation')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data && typeof data.currentRate === 'number') {
+          setLiveInflation({ rate: data.currentRate, source: data.source });
+        }
+      })
+      .catch(() => {})
+      .finally(() => setIsLoadingInflation(false));
   }, []);
+
+  const applyLiveInflation = () => {
+    if (liveInflation) {
+      setAccumParams((prev) => ({ ...prev, annualInflation: liveInflation.rate }));
+      setDecumParams((prev) => ({ ...prev, annualInflationRate: liveInflation.rate }));
+    }
+  };
+
+  const handleApplyScenario = (scenario: SavedScenario) => {
+    setActiveTab(scenario.activeTab);
+    setAccumParams(scenario.accumParams);
+    setDecumParams(scenario.decumParams);
+  };
 
   const toggleTheme = () => {
     setIsDarkMode((prev) => {
@@ -193,6 +254,27 @@ export const FinFreedomEngine: React.FC = () => {
         <div className="flex items-center gap-2 shrink-0">
           <button
             type="button"
+            onClick={() => setIsMinimalMode(!isMinimalMode)}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all ${
+              isMinimalMode
+                ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
+                : 'border-zinc-800 bg-zinc-900/80 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'
+            }`}
+            title={isMinimalMode ? 'Buka panel slider' : 'Sederhanakan tampilan (sembunyikan slider)'}
+          >
+            <SlidersHorizontal className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">{isMinimalMode ? 'Buka Slider' : 'Mode Minimalis'}</span>
+          </button>
+
+          <UserAuthMenu
+            currentAccumParams={accumParams}
+            currentDecumParams={decumParams}
+            currentActiveTab={activeTab}
+            onApplyScenario={handleApplyScenario}
+          />
+
+          <button
+            type="button"
             onClick={toggleTheme}
             className="flex items-center gap-2 p-2 sm:px-3 sm:py-1.5 rounded-lg border border-zinc-800 bg-zinc-900/80 text-zinc-300 hover:text-white hover:bg-zinc-800 text-xs font-medium transition-all"
             title="Ganti Tema Tampilan"
@@ -211,6 +293,19 @@ export const FinFreedomEngine: React.FC = () => {
           </button>
         </div>
       </header>
+
+      {/* Floating Toast: Konfirmasi & Simpan Berhasil */}
+      {showConfirmToast && (
+        <div className="fixed top-5 right-5 z-50 flex items-center gap-3 px-4 py-3 bg-zinc-900/95 border border-emerald-500/50 rounded-2xl shadow-2xl shadow-emerald-950/50 backdrop-blur-md text-emerald-200 text-xs sm:text-sm animate-in fade-in slide-in-from-top-4 duration-300 max-w-sm">
+          <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0 border border-emerald-500/30">
+            <CheckCircle2 className="w-5 h-5" />
+          </div>
+          <div className="min-w-0">
+            <div className="font-bold text-white">Pilihan Berhasil Disimpan!</div>
+            <div className="text-[11px] text-emerald-300/80">Tampilan disederhanakan tanpa slider untuk visualisasi lebih bersih.</div>
+          </div>
+        </div>
+      )}
 
       {/* Module Tab Switcher */}
       <nav aria-label="Simulasi Finansial Tab" className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-zinc-900/80 p-1.5 rounded-2xl border border-zinc-800/90 shadow-xl backdrop-blur-md">
@@ -386,7 +481,105 @@ export const FinFreedomEngine: React.FC = () => {
           <>
             {/* Left Column: Control Panel */}
             <div className={`lg:col-span-5 space-y-4 sm:space-y-5 ${mobileView === 'results' ? 'hidden lg:block' : 'block'}`}>
-              <div className="bg-zinc-900/70 border border-zinc-800 rounded-2xl p-3.5 sm:p-5 shadow-lg space-y-3.5 sm:space-y-5">
+              {isMinimalMode ? (
+                /* Card Ringkasan Minimalis (Tanpa Slider) */
+                <div className="bg-zinc-900/80 border border-emerald-500/30 rounded-2xl p-4 sm:p-5 shadow-xl space-y-4">
+                  <div className="flex items-center justify-between pb-3 border-b border-zinc-800/80">
+                    <div className="flex items-center gap-2.5">
+                      <div className="p-2 rounded-xl bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                        <CheckCircle2 className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h2 className="text-sm font-bold text-zinc-100">Pilihan Terkonfirmasi</h2>
+                          <span className="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded-full font-semibold">Tersimpan</span>
+                        </div>
+                        <p className="text-[11px] text-zinc-400">Mode ringkas tanpa deretan slider</p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsMinimalMode(false)}
+                      className="px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium flex items-center gap-1.5 border border-zinc-700 hover:border-zinc-600 transition"
+                      title="Buka panel slider untuk mengubah nilai"
+                    >
+                      <SlidersHorizontal className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Ubah Parameter</span>
+                    </button>
+                  </div>
+
+                  {/* Key-Value Summary Grid */}
+                  <div className="grid grid-cols-2 gap-2.5 text-xs">
+                    <div className="p-3 bg-zinc-950/70 rounded-xl border border-zinc-800/80 space-y-0.5">
+                      <span className="text-[11px] text-zinc-400">Investasi Rutin</span>
+                      <div className="text-sm font-bold text-emerald-400">{formatIDR(accumParams.monthlyInvestment)}</div>
+                      <div className="text-[10px] text-zinc-400">per bulan (DCA)</div>
+                    </div>
+                    <div className="p-3 bg-zinc-950/70 rounded-xl border border-zinc-800/80 space-y-0.5">
+                      <span className="text-[11px] text-zinc-400">Target Biaya Hidup</span>
+                      <div className="text-sm font-bold text-zinc-100">{formatIDR(accumParams.targetMonthlyExpense)}</div>
+                      <div className="text-[10px] text-zinc-400">per bulan saat FIRE</div>
+                    </div>
+                    <div className="p-3 bg-zinc-950/70 rounded-xl border border-zinc-800/80 space-y-0.5">
+                      <span className="text-[11px] text-zinc-400">Return Portofolio</span>
+                      <div className="text-sm font-bold text-zinc-100">{accumParams.annualReturn}% / thn</div>
+                      <div className="text-[10px] text-emerald-400">
+                        Dividen: {accumParams.dividendYield ?? 3.5}% ({accumParams.reinvestDividends !== false ? 'DRIP' : 'Tunai'})
+                      </div>
+                    </div>
+                    <div className="p-3 bg-zinc-950/70 rounded-xl border border-zinc-800/80 space-y-0.5">
+                      <span className="text-[11px] text-zinc-400">Laju Inflasi</span>
+                      <div className="text-sm font-bold text-zinc-100">{accumParams.annualInflation}% / thn</div>
+                      <div className="text-[10px] text-zinc-400">Riil: {accumulationResult.realReturnRate.toFixed(1)}%/thn</div>
+                    </div>
+                    <div className="p-3 bg-zinc-950/70 rounded-xl border border-zinc-800/80 space-y-0.5">
+                      <span className="text-[11px] text-zinc-400">Horison Waktu</span>
+                      <div className="text-sm font-bold text-zinc-100">{accumParams.timeHorizonYears} Tahun</div>
+                      <div className="text-[10px] text-zinc-400">Masa akumulasi dana</div>
+                    </div>
+                    <div className="p-3 bg-zinc-950/70 rounded-xl border border-zinc-800/80 space-y-0.5">
+                      <span className="text-[11px] text-zinc-400">Aturan SWR</span>
+                      <div className="text-sm font-bold text-zinc-100">{accumParams.swrMultiplier === 25 ? '4.0% (25x)' : '3.25% (30.8x)'}</div>
+                      <div className="text-[10px] text-zinc-400">Target: {formatCompactIDR(accumulationResult.targetFIRE)}</div>
+                    </div>
+                  </div>
+
+                  {/* Button to open sliders */}
+                  <button
+                    type="button"
+                    onClick={() => setIsMinimalMode(false)}
+                    className="w-full py-2.5 px-4 rounded-xl border border-zinc-700/80 bg-zinc-800/80 hover:bg-zinc-800 text-zinc-200 hover:text-white text-xs font-semibold flex items-center justify-center gap-2 transition"
+                  >
+                    <SlidersHorizontal className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Buka Slider untuk Mengubah Parameter</span>
+                  </button>
+
+                  {/* Mobile Quick Action Bar to View Results */}
+                  <div className="lg:hidden pt-3 border-t border-zinc-800 flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="text-[10px] text-zinc-400">Target FIRE: {formatCompactIDR(accumulationResult.targetFIRE)}</div>
+                      <div className={`text-xs font-bold truncate ${
+                        accumulationResult.finalFireStatus === 'surplus'
+                          ? 'text-emerald-400'
+                          : accumulationResult.finalFireStatus === 'exact'
+                          ? 'text-sky-400'
+                          : 'text-rose-400'
+                      }`}>
+                        Porto: {formatCompactIDR(accumulationResult.finalPortfolio)}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setMobileView('results')}
+                      className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-emerald-500/20 active:scale-95 transition shrink-0"
+                    >
+                      <span>Lihat Grafik</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-zinc-900/70 border border-zinc-800 rounded-2xl p-3.5 sm:p-5 shadow-lg space-y-3.5 sm:space-y-5">
                 <div className="flex items-center justify-between pb-3 border-b border-zinc-800/80">
                   <div className="flex items-center gap-2">
                     <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
@@ -548,24 +741,97 @@ export const FinFreedomEngine: React.FC = () => {
                 />
 
                 {/* 5. Asumsi Inflasi */}
-                <NumericSliderInput
-                  label="Asumsi Inflasi Rata-rata (%/tahun)"
-                  value={accumParams.annualInflation}
-                  onChange={(val) =>
-                    setAccumParams((prev) => ({ ...prev, annualInflation: val }))
-                  }
-                  min={1}
-                  max={12}
-                  step={0.5}
-                  suffix="%"
-                  tooltip="Ekspektasi laju inflasi jangka panjang di Indonesia (historis BPS berkisar 3-5%)."
-                  quickPresets={[
-                    { label: '3% Rendah', value: 3.0 },
-                    { label: '4% Target BI', value: 4.0 },
-                    { label: '5.5% Tinggi', value: 5.5 },
-                  ]}
-                  accentColor="emerald"
-                />
+                <div className="space-y-1">
+                  {liveInflation && (
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        onClick={applyLiveInflation}
+                        className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/25 text-[10px] font-medium transition-colors"
+                        title={liveInflation.source}
+                      >
+                        <span>🇮🇩 Gunakan Inflasi BPS/BI Terkini ({liveInflation.rate}%)</span>
+                      </button>
+                    </div>
+                  )}
+                  <NumericSliderInput
+                    label="Asumsi Inflasi Rata-rata (%/tahun)"
+                    value={accumParams.annualInflation}
+                    onChange={(val) =>
+                      setAccumParams((prev) => ({ ...prev, annualInflation: val }))
+                    }
+                    min={1}
+                    max={12}
+                    step={0.5}
+                    suffix="%"
+                    tooltip="Ekspektasi laju inflasi jangka panjang di Indonesia (historis BPS berkisar 3-5%)."
+                    quickPresets={[
+                      ...(liveInflation ? [{ label: `🇮🇩 ${liveInflation.rate}% BPS`, value: liveInflation.rate }] : []),
+                      { label: '3% Rendah', value: 3.0 },
+                      { label: '4% Target BI', value: 4.0 },
+                      { label: '5.5% Tinggi', value: 5.5 },
+                    ]}
+                    accentColor="emerald"
+                  />
+                </div>
+
+                {/* 6. Estimasi Yield Dividen & Strategi DRIP */}
+                <div className="p-3 rounded-xl bg-zinc-950/70 border border-zinc-800 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5 text-xs font-semibold text-zinc-200">
+                      <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                      <span>Dividen Saham / Kupon (%/tahun)</span>
+                    </div>
+                    {/* DRIP Toggle Switch */}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setAccumParams((prev) => ({
+                          ...prev,
+                          reinvestDividends: !(prev.reinvestDividends ?? true),
+                        }))
+                      }
+                      className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold transition-all border ${
+                        accumParams.reinvestDividends !== false
+                          ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40 shadow-xs'
+                          : 'bg-zinc-800/80 text-zinc-400 border-zinc-700/60'
+                      }`}
+                    >
+                      <span>{accumParams.reinvestDividends !== false ? '✓ DRIP Aktif' : '○ Cash Payout'}</span>
+                    </button>
+                  </div>
+
+                  <NumericSliderInput
+                    label="Estimasi Yield Dividen Portofolio"
+                    value={accumParams.dividendYield ?? 3.5}
+                    onChange={(val) =>
+                      setAccumParams((prev) => ({ ...prev, dividendYield: val }))
+                    }
+                    min={0}
+                    max={12}
+                    step={0.5}
+                    suffix="%"
+                    tooltip="Rata-rata dividen/kupon tahunan portofolio (IHSG ~2.5%, IDX High Dividend ~4-6%, Obligasi FR ~6-7%). Mode DRIP menginvestasikan kembali dividen untuk melipatgandakan bunga majemuk."
+                    quickPresets={[
+                      { label: '0% Non-Div', value: 0 },
+                      { label: '3.5% IHSG', value: 3.5 },
+                      { label: '5.5% High Yield', value: 5.5 },
+                    ]}
+                    accentColor="emerald"
+                  />
+                  <div className="text-[10px] text-zinc-400 leading-relaxed">
+                    {accumParams.reinvestDividends !== false ? (
+                      <span className="text-emerald-400">
+                        ⚡ <strong>DRIP Aktif:</strong> Dividen otomatis dibelikan kembali, total imbal hasil efektif:{' '}
+                        <strong>{(accumParams.annualReturn + (accumParams.dividendYield ?? 3.5)).toFixed(1)}%/tahun</strong>.
+                      </span>
+                    ) : (
+                      <span className="text-zinc-400">
+                        Dividen ditarik tunai sebagai passive income setiap tahun dan tidak menambah pokok investasi.
+                      </span>
+                    )}
+                  </div>
+                </div>
 
                 {/* 6. Horison Waktu */}
                 <NumericSliderInput
@@ -608,6 +874,21 @@ export const FinFreedomEngine: React.FC = () => {
                   </span>
                 </div>
 
+                {/* Tombol Konfirmasi & Simpan Pilihan */}
+                <div className="pt-2 border-t border-zinc-800/80">
+                  <button
+                    type="button"
+                    onClick={handleConfirmAndSave}
+                    className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/25 active:scale-[0.98] transition cursor-pointer"
+                  >
+                    <Check className="w-4 h-4 stroke-[3]" />
+                    <span>Konfirmasi & Simpan Pilihan</span>
+                  </button>
+                  <p className="text-[10px] text-center text-zinc-400 mt-1.5">
+                    Menyimpan skenario & beralih ke tampilan ringkas tanpa deretan slider.
+                  </p>
+                </div>
+
                 {/* Mobile Quick Action Bar to View Results */}
                 <div className="lg:hidden pt-3 border-t border-zinc-800 flex items-center justify-between gap-2">
                   <div className="min-w-0">
@@ -632,6 +913,7 @@ export const FinFreedomEngine: React.FC = () => {
                   </button>
                 </div>
               </div>
+              )}
             </div>
 
             {/* Right Column: Stat Cards & Recharts Graph */}
@@ -812,11 +1094,34 @@ export const FinFreedomEngine: React.FC = () => {
 
                   <div className="p-2.5 rounded-xl bg-zinc-950/80 border border-zinc-800 flex items-center justify-between gap-2">
                     <div className="text-xs text-zinc-300 font-medium">
-                      Passive Income Bulanan:
+                      Passive Income Bulanan (SWR):
                     </div>
                     <div className="text-sm sm:text-base font-bold text-teal-300 tabular-nums shrink-0">
                       {formatCompactIDR(accumulationResult.safeMonthlyPassiveIncome)}
                       <span className="text-xs font-normal text-zinc-400">/bln</span>
+                    </div>
+                  </div>
+
+                  {/* Dividend Passive Cashflow Metric */}
+                  <div className="p-2.5 rounded-xl bg-amber-950/20 border border-amber-500/30 flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="text-xs font-semibold text-amber-300 flex items-center gap-1">
+                        <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                        <span>Dividen Murni ({accumParams.dividendYield ?? 3.5}%):</span>
+                      </div>
+                      <div className="text-[10px] text-zinc-400">
+                        {accumParams.reinvestDividends !== false ? 'DRIP Reinvest' : 'Cash Payout'} • Tutup{' '}
+                        <strong className="text-emerald-400">{accumulationResult.dividendCoveragePercent}%</strong> biaya
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <div className="text-sm sm:text-base font-bold text-amber-300 tabular-nums">
+                        {formatCompactIDR(accumulationResult.finalMonthlyDividend)}
+                        <span className="text-xs font-normal text-zinc-400">/bln</span>
+                      </div>
+                      <div className="text-[9px] text-zinc-500">
+                        ({formatCompactIDR(accumulationResult.finalAnnualDividend)}/thn)
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1434,7 +1739,105 @@ export const FinFreedomEngine: React.FC = () => {
           <>
             {/* Left Column: Decumulation Controls */}
             <div className={`lg:col-span-5 space-y-4 sm:space-y-5 ${mobileView === 'results' ? 'hidden lg:block' : 'block'}`}>
-              <div className="bg-zinc-900/70 border border-zinc-800 rounded-2xl p-3.5 sm:p-5 shadow-lg space-y-3.5 sm:space-y-5">
+              {isMinimalMode ? (
+                /* Card Ringkasan Minimalis Modul B (Tanpa Slider) */
+                <div className="bg-zinc-900/80 border border-amber-500/30 rounded-2xl p-4 sm:p-5 shadow-xl space-y-4">
+                  <div className="flex items-center justify-between pb-3 border-b border-zinc-800/80">
+                    <div className="flex items-center gap-2.5">
+                      <div className="p-2 rounded-xl bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                        <CheckCircle2 className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h2 className="text-sm font-bold text-zinc-100">Pilihan SWR Terkonfirmasi</h2>
+                          <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-full font-semibold">Tersimpan</span>
+                        </div>
+                        <p className="text-[11px] text-zinc-400">Mode ringkas tanpa deretan slider</p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsMinimalMode(false)}
+                      className="px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium flex items-center gap-1.5 border border-zinc-700 hover:border-zinc-600 transition"
+                      title="Buka panel slider untuk mengubah nilai"
+                    >
+                      <SlidersHorizontal className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Ubah Parameter</span>
+                    </button>
+                  </div>
+
+                  {/* Key-Value Summary Grid */}
+                  <div className="grid grid-cols-2 gap-2.5 text-xs">
+                    <div className="p-3 bg-zinc-950/70 rounded-xl border border-zinc-800/80 space-y-0.5">
+                      <span className="text-[11px] text-zinc-400">Saldo Awal Pensiun</span>
+                      <div className="text-sm font-bold text-amber-400">{formatIDR(decumParams.initialRetirementBalance)}</div>
+                      <div className="text-[10px] text-zinc-400">Portofolio hari ke-1</div>
+                    </div>
+                    <div className="p-3 bg-zinc-950/70 rounded-xl border border-zinc-800/80 space-y-0.5">
+                      <span className="text-[11px] text-zinc-400">Pengeluaran Tahun 1</span>
+                      <div className="text-sm font-bold text-zinc-100">{formatIDR(decumParams.firstYearExpense)}</div>
+                      <div className="text-[10px] text-zinc-400">
+                        {((decumParams.firstYearExpense / decumParams.initialRetirementBalance) * 100).toFixed(1)}% dari saldo awal
+                      </div>
+                    </div>
+                    <div className="p-3 bg-zinc-950/70 rounded-xl border border-zinc-800/80 space-y-0.5">
+                      <span className="text-[11px] text-zinc-400">Return Portofolio</span>
+                      <div className="text-sm font-bold text-zinc-100">{decumParams.annualPortfolioReturn}% / thn</div>
+                      <div className="text-[10px] text-amber-400">Dividen: {decumParams.dividendYield ?? 3.5}%/thn</div>
+                    </div>
+                    <div className="p-3 bg-zinc-950/70 rounded-xl border border-zinc-800/80 space-y-0.5">
+                      <span className="text-[11px] text-zinc-400">Laju Inflasi</span>
+                      <div className="text-sm font-bold text-zinc-100">{decumParams.annualInflationRate}% / thn</div>
+                      <div className="text-[10px] text-zinc-400">Penyesuai biaya tahunan</div>
+                    </div>
+                    <div className="p-3 bg-zinc-950/70 rounded-xl border border-zinc-800/80 space-y-0.5">
+                      <span className="text-[11px] text-zinc-400">Lama Masa Pensiun</span>
+                      <div className="text-sm font-bold text-zinc-100">{decumParams.retirementYears} Tahun</div>
+                      <div className="text-[10px] text-zinc-400">Durasi uji ketahanan</div>
+                    </div>
+                    <div className="p-3 bg-zinc-950/70 rounded-xl border border-zinc-800/80 space-y-0.5">
+                      <span className="text-[11px] text-zinc-400">Hasil Uji SWR</span>
+                      <div className={`text-sm font-bold ${decumulationResult.standardFailureYear === null ? 'text-emerald-400' : 'text-rose-400'}`}>
+                        {decumulationResult.standardFailureYear === null ? '4% & 3.25% Aman' : `4% Habis Thn-${decumulationResult.standardFailureYear}`}
+                      </div>
+                      <div className="text-[10px] text-zinc-400">
+                        {decumulationResult.conservativeFailureYear === null ? '3.25% Aman Penuh' : `3.25% Habis Thn-${decumulationResult.conservativeFailureYear}`}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Button to open sliders */}
+                  <button
+                    type="button"
+                    onClick={() => setIsMinimalMode(false)}
+                    className="w-full py-2.5 px-4 rounded-xl border border-zinc-700/80 bg-zinc-800/80 hover:bg-zinc-800 text-zinc-200 hover:text-white text-xs font-semibold flex items-center justify-center gap-2 transition"
+                  >
+                    <SlidersHorizontal className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Buka Slider untuk Mengubah Parameter</span>
+                  </button>
+
+                  {/* Mobile Quick Action Bar to View Results */}
+                  <div className="lg:hidden pt-3 border-t border-zinc-800 flex items-center justify-between">
+                    <div>
+                      <div className="text-[10px] text-zinc-400">Saldo Pensiun: {formatCompactIDR(decumParams.initialRetirementBalance)}</div>
+                      <div className="text-xs font-bold text-amber-400">
+                        {decumulationResult.standardFailureYear !== null
+                          ? `4% Gagal Thn ke-${decumulationResult.standardFailureYear}`
+                          : 'Kedua Skenario Aman ✨'}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setMobileView('results')}
+                      className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-rose-600 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-amber-500/20 active:scale-95 transition"
+                    >
+                      <span>Lihat Grafik</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-zinc-900/70 border border-zinc-800 rounded-2xl p-3.5 sm:p-5 shadow-lg space-y-3.5 sm:space-y-5">
                 <div className="flex items-center justify-between pb-3 border-b border-zinc-800/80">
                   <div className="flex items-center gap-2">
                     <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/20">
@@ -1573,24 +1976,62 @@ export const FinFreedomEngine: React.FC = () => {
                 />
 
                 {/* 4. Laju Inflasi Rata-rata */}
+                <div className="space-y-1">
+                  {liveInflation && (
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        onClick={applyLiveInflation}
+                        className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/25 text-[10px] font-medium transition-colors"
+                        title={liveInflation.source}
+                      >
+                        <span>🇮🇩 Gunakan Inflasi BPS/BI Terkini ({liveInflation.rate}%)</span>
+                      </button>
+                    </div>
+                  )}
+                  <NumericSliderInput
+                    label="Laju Inflasi Rata-rata (%/tahun)"
+                    value={decumParams.annualInflationRate}
+                    onChange={(val) =>
+                      setDecumParams((prev) => ({
+                        ...prev,
+                        annualInflationRate: val,
+                      }))
+                    }
+                    min={1}
+                    max={12}
+                    step={0.5}
+                    suffix="%"
+                    tooltip="Laju inflasi tahunan penyesuai biaya hidup penarikan dana."
+                    quickPresets={[
+                      ...(liveInflation ? [{ label: `🇮🇩 ${liveInflation.rate}% BPS`, value: liveInflation.rate }] : []),
+                      { label: '3.5% Rendah', value: 3.5 },
+                      { label: '4.5% Historis ID', value: 4.5 },
+                      { label: '6.0% Konservatif', value: 6.0 },
+                    ]}
+                    accentColor="amber"
+                  />
+                </div>
+
+                {/* 5. Yield Dividen Portofolio Pensiun */}
                 <NumericSliderInput
-                  label="Laju Inflasi Rata-rata (%/tahun)"
-                  value={decumParams.annualInflationRate}
+                  label="Yield Dividen / Kupon Portofolio Pensiun (%/tahun)"
+                  value={decumParams.dividendYield ?? 3.5}
                   onChange={(val) =>
                     setDecumParams((prev) => ({
                       ...prev,
-                      annualInflationRate: val,
+                      dividendYield: val,
                     }))
                   }
-                  min={1}
+                  min={0}
                   max={12}
                   step={0.5}
                   suffix="%"
-                  tooltip="Laju inflasi tahunan penyesuai biaya hidup penarikan dana."
+                  tooltip="Persentase dividen saham atau kupon obligasi yang dihasilkan portofolio pensiun untuk menopang kebutuhan penarikan bulanan."
                   quickPresets={[
-                    { label: '3.5% Rendah', value: 3.5 },
-                    { label: '4.5% Historis ID', value: 4.5 },
-                    { label: '6.0% Konservatif', value: 6.0 },
+                    { label: '0% Non-Div', value: 0 },
+                    { label: '3.5% Campuran', value: 3.5 },
+                    { label: '6.0% High SBN/Div', value: 6.0 },
                   ]}
                   accentColor="amber"
                 />
@@ -1630,6 +2071,21 @@ export const FinFreedomEngine: React.FC = () => {
                   </p>
                 </div>
 
+                {/* Tombol Konfirmasi & Simpan Pilihan */}
+                <div className="pt-2 border-t border-zinc-800/80">
+                  <button
+                    type="button"
+                    onClick={handleConfirmAndSave}
+                    className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-amber-500 to-rose-600 hover:from-amber-400 hover:to-rose-500 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-amber-500/25 active:scale-[0.98] transition cursor-pointer"
+                  >
+                    <Check className="w-4 h-4 stroke-[3]" />
+                    <span>Konfirmasi & Simpan Pilihan</span>
+                  </button>
+                  <p className="text-[10px] text-center text-zinc-400 mt-1.5">
+                    Menyimpan skenario & beralih ke tampilan ringkas tanpa deretan slider.
+                  </p>
+                </div>
+
                 {/* Mobile Quick Action Bar to View Results */}
                 <div className="lg:hidden pt-3 border-t border-zinc-800 flex items-center justify-between">
                   <div>
@@ -1650,6 +2106,7 @@ export const FinFreedomEngine: React.FC = () => {
                   </button>
                 </div>
               </div>
+              )}
             </div>
 
             {/* Right Column: Decumulation Stats & Graphs */}
@@ -2189,6 +2646,18 @@ export const FinFreedomEngine: React.FC = () => {
                         </div>
                       </div>
                     </div>
+
+                    {/* Dividend Pill inside accumulation card */}
+                    <div className="mt-2.5 pt-2 border-t border-zinc-800/60 flex items-center justify-between text-[11px]">
+                      <div className="flex items-center gap-1.5 text-zinc-400">
+                        <Sparkles className="w-3 h-3 text-amber-400 shrink-0" />
+                        <span>Dividen (Est. Bulanan):</span>
+                      </div>
+                      <div className="font-mono text-amber-300 font-semibold">
+                        +{useCompactNumbers ? formatCompactIDR(row.monthlyDividend) : formatIDR(row.monthlyDividend)}
+                        <span className="text-[9px] font-normal text-zinc-500">/bln</span>
+                      </div>
+                    </div>
                   </div>
                 ))
               ) : (
@@ -2273,6 +2742,18 @@ export const FinFreedomEngine: React.FC = () => {
                         </div>
                       </div>
                     </div>
+
+                    {/* Dividend Pill inside decumulation card */}
+                    <div className="mt-2.5 pt-2 border-t border-zinc-800/60 flex items-center justify-between text-[11px]">
+                      <div className="flex items-center gap-1.5 text-zinc-400">
+                        <Sparkles className="w-3 h-3 text-amber-400 shrink-0" />
+                        <span>Dividen Portofolio 3.25%:</span>
+                      </div>
+                      <div className="font-mono text-amber-300 font-semibold">
+                        +{useCompactNumbers ? formatCompactIDR(row.annualDividendConservative) : formatIDR(row.annualDividendConservative)}
+                        <span className="text-[9px] font-normal text-zinc-500">/thn</span>
+                      </div>
+                    </div>
                   </div>
                 ))
               )}
@@ -2332,6 +2813,12 @@ export const FinFreedomEngine: React.FC = () => {
                           </div>
                         </th>
                         <th className="py-2.5 px-3">Bunga Bergulung (Gain)</th>
+                        <th className="py-2.5 px-3 text-amber-300">
+                          <div className="flex items-center gap-1">
+                            <Sparkles className="w-3 h-3 text-amber-400" />
+                            <span>Dividen (Est. / Bln)</span>
+                          </div>
+                        </th>
                         <th className="py-2.5 px-3 bg-zinc-950 border-l border-zinc-800">
                           <div>Ketetapan Target FIRE</div>
                           <div className="text-[9px] font-normal normal-case text-zinc-500">
@@ -2365,6 +2852,10 @@ export const FinFreedomEngine: React.FC = () => {
                           </td>
                           <td className="py-2 px-3 text-teal-400 font-medium">
                             +{useCompactNumbers ? formatCompactIDR(row.compoundGain) : formatIDR(row.compoundGain)}
+                          </td>
+                          <td className="py-2 px-3 text-amber-300 font-semibold">
+                            +{useCompactNumbers ? formatCompactIDR(row.monthlyDividend) : formatIDR(row.monthlyDividend)}
+                            <span className="text-[9px] text-zinc-500 font-normal">/bln</span>
                           </td>
                           <td className="py-2 px-3 font-sans border-l border-zinc-800/60">
                             {row.fireStatus === 'surplus' ? (
@@ -2411,6 +2902,12 @@ export const FinFreedomEngine: React.FC = () => {
                         <th className="py-2.5 px-3">Sisa Saldo SWR 4.0%</th>
                         <th className="py-2.5 px-3">Penarikan 3.25%</th>
                         <th className="py-2.5 px-3">Sisa Saldo SWR 3.25%</th>
+                        <th className="py-2.5 px-3 text-amber-300">
+                          <div className="flex items-center gap-1">
+                            <Sparkles className="w-3 h-3 text-amber-400" />
+                            <span>Dividen 3.25%</span>
+                          </div>
+                        </th>
                         <th className="py-2.5 px-3">Status Komparasi</th>
                       </tr>
                     </thead>
@@ -2450,6 +2947,10 @@ export const FinFreedomEngine: React.FC = () => {
                             }`}
                           >
                             {useCompactNumbers ? formatCompactIDR(row.balanceConservative) : formatIDR(row.balanceConservative)}
+                          </td>
+                          <td className="py-2 px-3 text-amber-300">
+                            +{useCompactNumbers ? formatCompactIDR(row.annualDividendConservative) : formatIDR(row.annualDividendConservative)}
+                            <span className="text-[9px] text-zinc-500 font-normal">/thn</span>
                           </td>
                           <td className="py-2 px-3 font-sans">
                             {row.isStandardDepleted && !row.isConservativeDepleted ? (

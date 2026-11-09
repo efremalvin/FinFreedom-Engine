@@ -10,6 +10,8 @@ export interface AccumulationParams {
   annualInflation: number;      // Asumsi Inflasi Tahunan (%)
   timeHorizonYears: number;     // Horison Waktu Simulasi (Tahun)
   swrMultiplier: SWRMultiplierOption; // Pengali SWR: 25x, 28.5x, 30.77x
+  dividendYield?: number;       // Asumsi Yield Dividen Tahunan (%), misal 3.5%
+  reinvestDividends?: boolean;  // Jika true, dividen diinvestasikan kembali (DRIP)
 }
 
 export interface AccumulationDataPoint {
@@ -25,6 +27,8 @@ export interface AccumulationDataPoint {
   fireDelta: number;            // Selisih nominal (+ surplus, 0 pas, - defisit)
   fireDeltaPercent: number;     // Persentase selisih thdp target (+/0/-)
   fireStatus: 'surplus' | 'exact' | 'deficit'; // Ketetapan status target FIRE
+  annualDividend: number;       // Estimasi Dividen Tahunan (Rp)
+  monthlyDividend: number;      // Estimasi Dividen Bulanan (Rp)
 }
 
 export interface AccumulationResult {
@@ -43,6 +47,9 @@ export interface AccumulationResult {
   finalFireDeltaPercent: number; // Persentase selisih akhir (+/0/-)
   finalFireStatus: 'surplus' | 'exact' | 'deficit'; // Ketetapan status FIRE akhir
   achievementPercentage: number; // Persentase ketercapaian target FIRE (cth: 120% atau 85%)
+  finalAnnualDividend: number;   // Dividen tahunan di akhir horison
+  finalMonthlyDividend: number;  // Dividen bulanan di akhir horison
+  dividendCoveragePercent: number; // Persentase pengeluaran tertutup dividen murni
 }
 
 export interface DecumulationParams {
@@ -52,6 +59,7 @@ export interface DecumulationParams {
   annualInflationRate: number;      // Laju Inflasi Rata-rata (%/tahun)
   retirementYears: number;          // Lama Masa Pensiun (Tahun)
   useAutomaticFirstYearExpense: boolean; // Jika true, 4% dari saldo awal
+  dividendYield?: number;           // Yield dividen tahunan (%)
 }
 
 export interface DecumulationDataPoint {
@@ -63,6 +71,8 @@ export interface DecumulationDataPoint {
   withdrawalConservative: number;   // Penarikan SWR 3.25% tahun ini
   isStandardDepleted: boolean;
   isConservativeDepleted: boolean;
+  annualDividendStandard: number;   // Dividen yang dihasilkan portofolio 4%
+  annualDividendConservative: number; // Dividen yang dihasilkan portofolio 3.25%
 }
 
 export interface DecumulationResult {
@@ -77,4 +87,17 @@ export interface DecumulationResult {
   firstYearWithdrawalConservative: number;
   lastYearWithdrawalStandard: number;
   lastYearWithdrawalConservative: number;
+  totalDividendStandard: number;
+  totalDividendConservative: number;
+}
+
+export interface SavedScenario {
+  id: string;
+  name: string;
+  description?: string;
+  createdAt: string;
+  updatedAt: string;
+  activeTab: TabType;
+  accumParams: AccumulationParams;
+  decumParams: DecumulationParams;
 }

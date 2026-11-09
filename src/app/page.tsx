@@ -1,9 +1,11 @@
+import { AuthProvider } from '@/context/AuthContext';
 import { FinFreedomEngine } from '@/components/FinFreedomEngine';
 import { Sparkles, ShieldCheck, Calculator, ArrowUpRight } from 'lucide-react';
 
 export default function Home() {
   return (
-    <main className="min-h-screen bg-zinc-950 text-zinc-100 antialiased py-2.5 sm:py-8 px-0 sm:px-4">
+    <AuthProvider>
+      <main className="min-h-screen bg-zinc-950 text-zinc-100 antialiased py-2.5 sm:py-8 px-0 sm:px-4">
       {/* Background radial gradient glow */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
         <div className="absolute top-[-10%] left-[20%] w-[500px] h-[500px] bg-emerald-500/10 rounded-full blur-[140px]" />
@@ -73,5 +75,6 @@ export default function Home() {
         </footer>
       </div>
     </main>
+    </AuthProvider>
   );
 }

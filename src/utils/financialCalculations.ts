@@ -18,6 +18,8 @@ export function calculateAccumulation(params: {
   annualInflation: number;
   timeHorizonYears: number;
   swrMultiplier: number;
+  dividendYield?: number;
+  reinvestDividends?: boolean;
 }): AccumulationResult {
   const {
     initialCapital = 0,
@@ -27,12 +29,16 @@ export function calculateAccumulation(params: {
     annualInflation,
     timeHorizonYears,
     swrMultiplier,
+    dividendYield = 3.5,
+    reinvestDividends = true,
   } = params;
 
-  const nominalRate = annualReturn / 100;
+  // If DRIP (Dividend Reinvestment) is active, dividend yield is added to total compounding growth
+  const effectiveAnnualReturn = annualReturn + (reinvestDividends ? dividendYield : 0);
+  const nominalRate = effectiveAnnualReturn / 100;
   const inflationRate = annualInflation / 100;
   const monthlyRate = nominalRate / 12;
-  const realReturnRate = annualReturn - annualInflation;
+  const realReturnRate = effectiveAnnualReturn - annualInflation;
 
   // Financial Freedom Target Number
   const targetFIRE = Math.round(targetMonthlyExpense * 12 * swrMultiplier);
@@ -40,12 +46,15 @@ export function calculateAccumulation(params: {
   const dataPoints: AccumulationDataPoint[] = [];
   let yearReached: number | null = null;
 
-  // Year 0 (Starting point: starts from 0 rupiah)
+  // Year 0 (Starting point)
   const initCap = initialCapital || 0;
   const delta0 = initCap - targetFIRE;
   const deltaPercent0 = targetFIRE > 0 ? (delta0 / targetFIRE) * 100 : 0;
   const status0: 'surplus' | 'exact' | 'deficit' =
     delta0 > 0 ? 'surplus' : delta0 === 0 ? 'exact' : 'deficit';
+
+  const annualDiv0 = Math.round(initCap * (dividendYield / 100));
+  const monthlyDiv0 = Math.round(annualDiv0 / 12);
 
   dataPoints.push({
     year: 0,
@@ -60,6 +69,8 @@ export function calculateAccumulation(params: {
     fireDelta: delta0,
     fireDeltaPercent: Number(deltaPercent0.toFixed(1)),
     fireStatus: status0,
+    annualDividend: annualDiv0,
+    monthlyDividend: monthlyDiv0,
   });
 
   if (initCap >= targetFIRE && targetFIRE > 0 && yearReached === null) {
@@ -84,7 +95,7 @@ export function calculateAccumulation(params: {
     const totalPrincipal = initCap + monthlyInvestment * totalMonths;
     const compoundGain = Math.max(0, totalPortfolio - totalPrincipal);
 
-    // Real value adjusted for inflation (dikurangi inflasi pertahun)
+    // Real value adjusted for inflation
     const inflationFactor = Math.pow(1 + inflationRate, year);
     const realPortfolio = totalPortfolio / inflationFactor;
     const realPrincipal = totalPrincipal / inflationFactor;
@@ -100,6 +111,9 @@ export function calculateAccumulation(params: {
       yearReached = year;
     }
 
+    const annualDiv = Math.round(roundedPortfolio * (dividendYield / 100));
+    const monthlyDiv = Math.round(annualDiv / 12);
+
     dataPoints.push({
       year,
       label: `Thn ${year}`,
@@ -113,6 +127,8 @@ export function calculateAccumulation(params: {
       fireDelta: delta,
       fireDeltaPercent: Number(deltaPercent.toFixed(1)),
       fireStatus,
+      annualDividend: annualDiv,
+      monthlyDividend: monthlyDiv,
     });
   }
 
@@ -133,6 +149,13 @@ export function calculateAccumulation(params: {
   // Safe monthly passive income produced by final portfolio (at selected SWR rate)
   const safeMonthlyPassiveIncome = Math.round(finalPortfolio / (12 * swrMultiplier));
 
+  // Final Dividend figures
+  const finalAnnualDividend = Math.round(finalPortfolio * (dividendYield / 100));
+  const finalMonthlyDividend = Math.round(finalAnnualDividend / 12);
+  const dividendCoveragePercent = targetMonthlyExpense > 0
+    ? Number(((finalMonthlyDividend / targetMonthlyExpense) * 100).toFixed(1))
+    : 0;
+
   return {
     dataPoints,
     finalPortfolio,
@@ -149,6 +172,9 @@ export function calculateAccumulation(params: {
     finalFireDeltaPercent: Number(finalFireDeltaPercent.toFixed(1)),
     finalFireStatus,
     achievementPercentage: Number(achievementPercentage.toFixed(1)),
+    finalAnnualDividend,
+    finalMonthlyDividend,
+    dividendCoveragePercent,
   };
 }
 
@@ -163,10 +189,12 @@ export function calculateDecumulation(params: DecumulationParams): DecumulationR
     annualInflationRate,
     retirementYears,
     useAutomaticFirstYearExpense,
+    dividendYield = 3.5,
   } = params;
 
   const returnRate = annualPortfolioReturn / 100;
   const inflationRate = annualInflationRate / 100;
+  const divRate = dividendYield / 100;
 
   // Year 1 Initial Withdrawals
   // Standard 4.0%
@@ -188,10 +216,15 @@ export function calculateDecumulation(params: DecumulationParams): DecumulationR
 
   let totalWithdrawalStd = 0;
   let totalWithdrawalCons = 0;
+  let totalDividendStd = 0;
+  let totalDividendCons = 0;
 
   const dataPoints: DecumulationDataPoint[] = [];
 
   // Year 0
+  const initDivStd = Math.round(balanceStd * divRate);
+  const initDivCons = Math.round(balanceCons * divRate);
+
   dataPoints.push({
     year: 0,
     label: 'Thn 0',
@@ -201,6 +234,8 @@ export function calculateDecumulation(params: DecumulationParams): DecumulationR
     withdrawalConservative: 0,
     isStandardDepleted: false,
     isConservativeDepleted: false,
+    annualDividendStandard: initDivStd,
+    annualDividendConservative: initDivCons,
   });
 
   let lastYearWithdrawalStd = initialWithdrawalStd;
@@ -217,7 +252,10 @@ export function calculateDecumulation(params: DecumulationParams): DecumulationR
     lastYearWithdrawalCons = currentWithdrawalCons;
 
     // Standard Scenario (4.0%)
+    let yearDivStd = 0;
     if (balanceStd > 0) {
+      yearDivStd = Math.round(balanceStd * divRate);
+      totalDividendStd += yearDivStd;
       const growthStd = balanceStd * (1 + returnRate);
       if (growthStd < currentWithdrawalStd) {
         totalWithdrawalStd += growthStd;
@@ -237,7 +275,10 @@ export function calculateDecumulation(params: DecumulationParams): DecumulationR
     }
 
     // Conservative Indonesia Scenario (3.25%)
+    let yearDivCons = 0;
     if (balanceCons > 0) {
+      yearDivCons = Math.round(balanceCons * divRate);
+      totalDividendCons += yearDivCons;
       const growthCons = balanceCons * (1 + returnRate);
       if (growthCons < currentWithdrawalCons) {
         totalWithdrawalCons += growthCons;
@@ -265,6 +306,8 @@ export function calculateDecumulation(params: DecumulationParams): DecumulationR
       withdrawalConservative: Math.round(currentWithdrawalCons),
       isStandardDepleted: balanceStd <= 0,
       isConservativeDepleted: balanceCons <= 0,
+      annualDividendStandard: yearDivStd,
+      annualDividendConservative: yearDivCons,
     });
   }
 
@@ -280,5 +323,7 @@ export function calculateDecumulation(params: DecumulationParams): DecumulationR
     firstYearWithdrawalConservative: Math.round(initialWithdrawalCons),
     lastYearWithdrawalStandard: Math.round(lastYearWithdrawalStd),
     lastYearWithdrawalConservative: Math.round(lastYearWithdrawalCons),
+    totalDividendStandard: Math.round(totalDividendStd),
+    totalDividendConservative: Math.round(totalDividendCons),
   };
 }
