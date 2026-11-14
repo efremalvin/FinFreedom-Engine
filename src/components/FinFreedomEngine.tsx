@@ -221,10 +221,13 @@ export const FinFreedomEngine: React.FC = () => {
 
   if (!mounted) {
     return (
-      <div className="w-full min-h-[600px] flex items-center justify-center bg-zinc-950 text-zinc-400">
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-4 rounded-full border-2 border-emerald-500 border-t-transparent animate-spin" />
-          <span className="text-sm font-medium">Memuat Simulator Finansial...</span>
+      <div className="w-full min-h-[600px] flex flex-col items-center justify-center gap-3 bg-zinc-950 text-zinc-400">
+        <div className="w-12 h-12 animate-pulse">
+          <img src="/FinFreeLogo.svg" alt="FinFreedom Engine" className="w-full h-full object-contain" />
+        </div>
+        <div className="flex items-center gap-2 text-xs font-medium text-zinc-400">
+          <div className="w-3.5 h-3.5 rounded-full border-2 border-emerald-500 border-t-transparent animate-spin" />
+          <span>Memuat Simulator Finansial...</span>
         </div>
       </div>
     );
@@ -235,8 +238,12 @@ export const FinFreedomEngine: React.FC = () => {
       {/* Top Header Bar */}
       <header className="flex items-center justify-between gap-3 pb-3 sm:pb-4 border-b border-zinc-800/80">
         <div className="min-w-0 flex items-center gap-2.5">
-          <div className="w-9 h-9 shrink-0 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-700 flex items-center justify-center shadow-lg shadow-emerald-500/20 text-white font-bold text-lg">
-            <Sparkles className="w-5 h-5 text-emerald-100" />
+          <div className="w-9 h-9 sm:w-10 sm:h-10 shrink-0 rounded-xl bg-zinc-900/90 border border-emerald-500/30 p-1 flex items-center justify-center shadow-lg shadow-emerald-500/15 hover:border-emerald-500/50 transition-all">
+            <img
+              src="/FinFreeLogo.svg"
+              alt="FinFreedom Engine Logo"
+              className="w-full h-full object-contain drop-shadow-sm"
+            />
           </div>
           <div className="min-w-0">
             <h1 className="text-lg sm:text-2xl font-bold tracking-tight text-zinc-100 flex flex-wrap items-center gap-1.5 sm:gap-2">
