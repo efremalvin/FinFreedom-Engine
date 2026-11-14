@@ -223,7 +223,7 @@ export const FinFreedomEngine: React.FC = () => {
     return (
       <div className="w-full min-h-[600px] flex flex-col items-center justify-center gap-3 bg-zinc-950 text-zinc-400">
         <div className="w-12 h-12 animate-pulse">
-          <img src="/FinFreeLogo.svg" alt="FinFreedom Engine" className="w-full h-full object-contain" />
+          <img src="/FinFreeLogo.png" alt="FinFreedom Engine" className="w-full h-full object-contain" />
         </div>
         <div className="flex items-center gap-2 text-xs font-medium text-zinc-400">
           <div className="w-3.5 h-3.5 rounded-full border-2 border-emerald-500 border-t-transparent animate-spin" />
@@ -240,7 +240,7 @@ export const FinFreedomEngine: React.FC = () => {
         <div className="min-w-0 flex items-center gap-2.5">
           <div className="w-9 h-9 sm:w-10 sm:h-10 shrink-0 rounded-xl bg-zinc-900/90 border border-emerald-500/30 p-1 flex items-center justify-center shadow-lg shadow-emerald-500/15 hover:border-emerald-500/50 transition-all">
             <img
-              src="/FinFreeLogo.svg"
+              src="/FinFreeLogo.png"
               alt="FinFreedom Engine Logo"
               className="w-full h-full object-contain drop-shadow-sm"
             />
